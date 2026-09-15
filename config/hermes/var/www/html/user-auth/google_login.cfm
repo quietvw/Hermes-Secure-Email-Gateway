@@ -214,9 +214,11 @@ function normalizeGoogleDomains(rawValue) {
                         <cfelseif googleProvisionStatus EQ "exists">
                             <cfset flowStatus = "success">
                             <cfset flowTitle = "Account Already Available">
-                            <cfset flowMessage = googleProvisionMessage>
-                            <cfset flowRedirectPath = IsDefined("googleProvisionPortalPath") ? googleProvisionPortalPath : "/users/">
-                            <cflocation url="#flowRedirectPath#" addtoken="no">
+                            <cfif IsDefined("googleProvisionExistingAuthType") AND googleProvisionExistingAuthType EQ "remote">
+                                <cfset flowMessage = "A Hermes SEG account already exists for #HTMLEditFormat(flowEmail)#. Use your organization credentials to sign in. Contact your system administrator if you need help accessing the account.">
+                            <cfelse>
+                                <cfset flowMessage = "A Hermes SEG account already exists for #HTMLEditFormat(flowEmail)#. Open the User Console and use Reset password? if you need to set or change your password.">
+                            </cfif>
                         <cfelse>
                             <cfset flowTitle = "Organization Login Failed">
                             <cfset flowMessage = googleProvisionMessage>

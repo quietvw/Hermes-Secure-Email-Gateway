@@ -34,13 +34,34 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 <!--- EDIT RECIPIENT ENDS HERE --->
 
 <!--- EDIT USER_SETTINGS STARTS HERE --->
-<cfquery name="editusersettings" datasource="hermes">
-    UPDATE user_settings
-    SET report_enabled = <cfqueryparam value="#form.reports#"      cfsqltype="cf_sql_varchar">,
-        train_bayes    = <cfqueryparam value="#form.train_bayes#"  cfsqltype="cf_sql_tinyint">,
-        download_msg   = <cfqueryparam value="#form.download_msg#" cfsqltype="cf_sql_tinyint">
-    WHERE email        = <cfqueryparam value="#recipient#"         cfsqltype="cf_sql_varchar">
+<cfquery name="checkUserSettingsRow" datasource="hermes">
+    SELECT email
+    FROM user_settings
+    WHERE email = <cfqueryparam value="#recipient#" cfsqltype="cf_sql_varchar">
+    LIMIT 1
 </cfquery>
+
+<cfif checkUserSettingsRow.recordcount GTE 1>
+    <cfquery name="editusersettings" datasource="hermes">
+        UPDATE user_settings
+        SET report_enabled = <cfqueryparam value="#form.reports#"      cfsqltype="cf_sql_varchar">,
+            train_bayes    = <cfqueryparam value="#form.train_bayes#"  cfsqltype="cf_sql_tinyint">,
+            download_msg   = <cfqueryparam value="#form.download_msg#" cfsqltype="cf_sql_tinyint">
+        WHERE email        = <cfqueryparam value="#recipient#"         cfsqltype="cf_sql_varchar">
+    </cfquery>
+<cfelse>
+    <cfquery name="insertusersettings" datasource="hermes">
+        INSERT INTO user_settings
+        (email, report_enabled, train_bayes, download_msg)
+        VALUES
+        (
+            <cfqueryparam value="#recipient#" cfsqltype="cf_sql_varchar">,
+            <cfqueryparam value="#form.reports#" cfsqltype="cf_sql_varchar">,
+            <cfqueryparam value="#form.train_bayes#" cfsqltype="cf_sql_tinyint">,
+            <cfqueryparam value="#form.download_msg#" cfsqltype="cf_sql_tinyint">
+        )
+    </cfquery>
+</cfif>
 <!--- EDIT USER_SETTINGS ENDS HERE --->
 
 <!--- RELAY RECIPIENT SYSTEM ADMIN SYNC --->
@@ -53,6 +74,24 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 </cfquery>
 
 <cfif getRecipientAdminContext.recordcount GTE 1>
+    <cfif form.system_admin EQ "1" AND Len(Trim(getRecipientAdminContext.ldap_username)) EQ 0>
+        <cfset recipientEmail = getRecipientAdminContext.recipient>
+        <cfif getRecipientAdminContext.auth_type EQ "remote" AND Len(Trim(getRecipientAdminContext.remoteauth_domain)) GT 0>
+            <cfset remoteauthDomain = getRecipientAdminContext.remoteauth_domain>
+            <cfinclude template="ldap_add_user_relay_remoteauth.cfm">
+        <cfelse>
+            <cfinclude template="ldap_add_user_relay.cfm">
+        </cfif>
+
+        <cfif NOT IsDefined("ldapUserCreated") OR NOT ldapUserCreated>
+            <cfset m="Edit Relay Recipients: unable to provision LDAP user for relay admin access">
+            <cfinclude template="error.cfm">
+            <cfabort>
+        </cfif>
+
+        <cfset getRecipientAdminContext.ldap_username = LCase(recipientEmail)>
+    </cfif>
+
     <cfset relayAdminUsername = Len(Trim(getRecipientAdminContext.ldap_username)) GT 0 ? LCase(Trim(getRecipientAdminContext.ldap_username)) : LCase(getRecipientAdminContext.recipient)>
     <cfset relayAdminAccessControl = getRecipientAdminContext.enforce_mfa EQ 1 ? "two_factor" : "one_factor">
 
