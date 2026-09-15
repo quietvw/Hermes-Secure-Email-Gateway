@@ -169,9 +169,11 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 SET applied = '0'
                 WHERE id = <cfqueryparam value="#targetSystemUserId#" cfsqltype="cf_sql_integer">
             </cfquery>
-            <cfset ldapUsername = relayAdminUsername>
-            <cfset adminGroupAction = "remove">
-            <cfinclude template="ldap_toggle_admin_group.cfm">
+            <cfif Len(Trim(targetSystemUserUsername)) GT 0>
+                <cfset ldapUsername = targetSystemUserUsername>
+                <cfset adminGroupAction = "remove">
+                <cfinclude template="ldap_toggle_admin_group.cfm">
+            </cfif>
 
             <cfset relayAdminSessionTargets = "">
             <cfloop list="#targetSystemUserUsername#,#targetSystemUserEmail#,#relayAdminUsername#,#getRecipientAdminContext.recipient#" index="candidateSessionUser">

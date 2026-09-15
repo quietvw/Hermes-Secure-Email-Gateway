@@ -370,7 +370,7 @@ All LDAP includes are reused as-is.
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
 
-    <cfif Len(Trim(form.username)) GT 0>
+    <cfif ListFindNoCase("2,3", getuser.system) AND Len(Trim(form.username)) GT 0>
       <cfset ldapUsername = form.username>
       <cfset adminGroupAction = "add">
       <cfinclude template="ldap_toggle_admin_group.cfm">
@@ -411,7 +411,7 @@ All LDAP includes are reused as-is.
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
 
-    <cfif Len(Trim(form.username)) GT 0>
+    <cfif ListFindNoCase("2,3", getuser.system) AND Len(Trim(form.username)) GT 0>
       <cfset ldapUsername = form.username>
       <cfset adminGroupAction = "add">
       <cfinclude template="ldap_toggle_admin_group.cfm">
@@ -476,7 +476,7 @@ All LDAP includes are reused as-is.
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
 
-    <cfif Len(Trim(form.username)) GT 0>
+    <cfif ListFindNoCase("2,3", getuser.system) AND Len(Trim(form.username)) GT 0>
       <cfset ldapUsername = form.username>
       <cfset adminGroupAction = "add">
       <cfinclude template="ldap_toggle_admin_group.cfm">
