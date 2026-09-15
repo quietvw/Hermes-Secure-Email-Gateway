@@ -59,6 +59,10 @@ function escapeLdapRdnValue(rawValue) {
 
     return escaped;
 }
+
+function escapeCommandArgument(rawValue) {
+    return Chr(34) & Replace(ToString(arguments.rawValue), Chr(34), "\" & Chr(34), "all") & Chr(34);
+}
 </cfscript>
 
 <cfif Len(Trim(ldapUsername)) GT 0 AND ListFindNoCase("add,remove", adminGroupAction)>
@@ -66,7 +70,11 @@ function escapeLdapRdnValue(rawValue) {
 
     <cfset ldapModifyResult = "">
     <cfset ldapModifyError = "">
-    <cfset fileToDelete = "/opt/hermes/tmp/#customtrans3#_toggle_admin_group.ldif">
+    <cfset safeFileSuffix = REReplace(customtrans3, "[^A-Za-z0-9_-]", "", "all")>
+    <cfif safeFileSuffix EQ "">
+        <cfset safeFileSuffix = Hash(customtrans3)>
+    </cfif>
+    <cfset fileToDelete = "/opt/hermes/tmp/#safeFileSuffix#_toggle_admin_group.ldif">
     <cfset ldapEscapedUsername = escapeLdapRdnValue(ldapUsername)>
 
     <cfif adminGroupAction EQ "add">
@@ -82,7 +90,7 @@ function escapeLdapRdnValue(rawValue) {
             addNewLine="no">
 
         <cfexecute name="/usr/local/bin/docker"
-            arguments="exec hermes_ldap ldapmodify -Y EXTERNAL -H ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi -f #fileToDelete#"
+            arguments='exec hermes_ldap ldapmodify -Y EXTERNAL -H ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi -f #escapeCommandArgument(fileToDelete)#'
             variable="ldapModifyResult"
             errorVariable="ldapModifyError"
             timeout="60">

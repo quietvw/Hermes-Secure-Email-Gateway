@@ -53,7 +53,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 </cfquery>
 
 <cfif getRecipientAdminContext.recordcount GTE 1>
-    <cfset relayAdminUsername = getRecipientAdminContext.ldap_username NEQ "" ? LCase(getRecipientAdminContext.ldap_username) : LCase(getRecipientAdminContext.recipient)>
+    <cfset relayAdminUsername = Len(Trim(getRecipientAdminContext.ldap_username)) GT 0 ? LCase(Trim(getRecipientAdminContext.ldap_username)) : LCase(getRecipientAdminContext.recipient)>
 
     <cfquery name="getSystemUserByUsername" datasource="hermes">
         SELECT id, username, email, system
@@ -158,22 +158,17 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             <cfset adminGroupAction = "remove">
             <cfinclude template="ldap_toggle_admin_group.cfm">
 
-            <cfif Len(Trim(targetSystemUserUsername)) GT 0>
-                <cfset targetSessionUser = targetSystemUserUsername>
+            <cfset relayAdminSessionTargets = "">
+            <cfloop list="#targetSystemUserUsername#,#targetSystemUserEmail#,#relayAdminUsername#,#getRecipientAdminContext.recipient#" index="candidateSessionUser">
+                <cfset candidateSessionUser = Trim(candidateSessionUser)>
+                <cfif Len(candidateSessionUser) GT 0 AND NOT ListFindNoCase(relayAdminSessionTargets, candidateSessionUser)>
+                    <cfset relayAdminSessionTargets = ListAppend(relayAdminSessionTargets, candidateSessionUser)>
+                </cfif>
+            </cfloop>
+
+            <cfloop list="#relayAdminSessionTargets#" index="targetSessionUser">
                 <cfinclude template="invalidate_user_sessions.cfm">
-            </cfif>
-            <cfif Len(Trim(targetSystemUserEmail)) GT 0 AND targetSystemUserEmail NEQ targetSystemUserUsername>
-                <cfset targetSessionUser = targetSystemUserEmail>
-                <cfinclude template="invalidate_user_sessions.cfm">
-            </cfif>
-            <cfif relayAdminUsername NEQ "" AND relayAdminUsername NEQ targetSystemUserUsername>
-                <cfset targetSessionUser = relayAdminUsername>
-                <cfinclude template="invalidate_user_sessions.cfm">
-            </cfif>
-            <cfif getRecipientAdminContext.recipient NEQ "" AND getRecipientAdminContext.recipient NEQ targetSystemUserEmail>
-                <cfset targetSessionUser = getRecipientAdminContext.recipient>
-                <cfinclude template="invalidate_user_sessions.cfm">
-            </cfif>
+            </cfloop>
         </cfif>
     </cfif>
 </cfif>
