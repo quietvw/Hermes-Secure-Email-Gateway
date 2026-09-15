@@ -244,10 +244,14 @@ the url: https://#ConsoleHost#</cfoutput>
        <CFQUERY NAME="checkuser" DATASOURCE="hermes">
        SELECT id, username, first_name, last_name, email
        FROM system_users
-       WHERE username='#session.theUser#'
+       WHERE username = <cfqueryparam value="#session.theUser#" cfsqltype="cf_sql_varchar">
+         AND applied = '1'
        </CFQUERY>
 
        <cfif #checkuser.recordcount# LT 1>
+       <cfset m="Appplication.cfc: system user is disabled or unauthorized">
+       <cfinclude template="/admin/2/inc/error.cfm">
+       <cfabort>
 
        <!--- PROCESS SYSTEM USER LOG IN --->
        <cfelseif #checkuser.recordcount# GTE 1>

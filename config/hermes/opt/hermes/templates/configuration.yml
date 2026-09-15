@@ -139,13 +139,10 @@ access_control:
     # because it corrupts upstream 302 Location headers during the OIDC
     # auto-redirect flow.
 
-    #Deny Access to /users for admins
-    - domain: hermes_access_control_domain
-      resources:
-      - '^/users([/?].*)?$'
-      subject:
-      - "group:admins"
-      policy: deny
+    # Pure admins still miss every /users allow rule below and therefore remain
+    # denied by the default policy. We intentionally do NOT hard-deny admins
+    # here so a relay or mailbox user who is also in cn=admins can access both
+    # /admin and /users.
 
 
       #/admin two_factor
@@ -288,5 +285,4 @@ identity_providers:
           - 'groups'
         userinfo_signed_response_alg: 'none'
         consent_mode: implicit
-
 

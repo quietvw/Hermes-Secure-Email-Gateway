@@ -213,7 +213,7 @@ All LDAP includes are reused as-is.
   </cfif>
 
   <!--- VALIDATE REQUIRED FIELDS --->
-  <cfloop list="username,email,first_name,last_name,access_control,password,setpassword,hibp" index="f">
+  <cfloop list="username,email,first_name,last_name,access_control,password,setpassword,hibp,active" index="f">
     <cfif NOT StructKeyExists(form, f)>
       <cfset session.m = "system_user_actions.cfm: form.#f# does not exist">
       <cfset session.alerttype = "error">
@@ -236,6 +236,13 @@ All LDAP includes are reused as-is.
   <!--- Validate setpassword --->
   <cfif NOT ListFindNoCase("YES,NO", form.setpassword)>
     <cfset session.m = "system_user_actions.cfm: invalid setpassword value">
+    <cfset session.alerttype = "error">
+    <cflocation url="view_system_users.cfm" addtoken="no">
+  </cfif>
+
+  <!--- Validate active --->
+  <cfif form.active NEQ "0" AND form.active NEQ "1">
+    <cfset session.m = "system_user_actions.cfm: invalid active value">
     <cfset session.alerttype = "error">
     <cflocation url="view_system_users.cfm" addtoken="no">
   </cfif>
@@ -315,6 +322,22 @@ All LDAP includes are reused as-is.
     WHERE id = <cfqueryparam value="#theID#" cfsqltype="cf_sql_integer">
   </cfquery>
 
+  <cfif form.active EQ "0">
+    <cfquery datasource="hermes">
+      UPDATE system_users SET applied = '0' WHERE id = <cfqueryparam value="#theID#" cfsqltype="cf_sql_integer">
+    </cfquery>
+
+    <cfset ldapUsername = form.username>
+    <cfset adminGroupAction = "remove">
+    <cfinclude template="ldap_toggle_admin_group.cfm">
+
+    <cfset targetSessionUser = form.username>
+    <cfinclude template="invalidate_user_sessions.cfm">
+
+    <cfset session.m = 32>
+    <cflocation url="view_system_users.cfm" addtoken="no">
+  </cfif>
+
   <!--- STEP 7: Route based on auth type and password setting --->
   <cfif form.auth_type EQ "remote">
     <!--- REMOTE AUTH: No password, sync with seeAlso --->
@@ -346,6 +369,9 @@ All LDAP includes are reused as-is.
       <cfset ldapNewAccessControl = form.access_control>
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
+
+    <cfset adminGroupAction = "add">
+    <cfinclude template="ldap_toggle_admin_group.cfm">
 
     <cfset session.m = 18>
     <cflocation url="view_system_users.cfm" addtoken="no">
@@ -381,6 +407,9 @@ All LDAP includes are reused as-is.
       <cfset ldapNewAccessControl = form.access_control>
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
+
+    <cfset adminGroupAction = "add">
+    <cfinclude template="ldap_toggle_admin_group.cfm">
 
     <cfset session.m = 14>
     <cflocation url="view_system_users.cfm" addtoken="no">
@@ -440,6 +469,9 @@ All LDAP includes are reused as-is.
       <cfset ldapNewAccessControl = form.access_control>
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
+
+    <cfset adminGroupAction = "add">
+    <cfinclude template="ldap_toggle_admin_group.cfm">
 
     <cfset session.m = 14>
     <cflocation url="view_system_users.cfm" addtoken="no">

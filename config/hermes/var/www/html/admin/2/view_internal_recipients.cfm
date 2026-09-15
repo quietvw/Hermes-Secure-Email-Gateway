@@ -117,6 +117,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             $("#editoptions_modal select[name='train_bayes']").val(String(rec.train_bayes));
             $("#editoptions_modal select[name='download_msg']").val(String(rec.download_msg));
             $("#editoptions_modal select[name='enforce_mfa']").val(String(rec.enforce_mfa || 0));
+            $("#editoptions_modal select[name='system_admin']").val(String(rec.system_admin || 0));
             $("#editoptionsid").html('<input type="hidden" name="recipient_id" value="' + theRecipientId + '">');
             $('#editoptions_modal').modal('show');
           } catch (e) {
@@ -775,6 +776,15 @@ a, a:hover{
     </div>
     <!--- /2FA ENFORCEMENT --->
 
+    <div class="form-group mb-3">
+      <label><strong>System Administrator</strong></label>
+      <select class="form-control" name="system_admin" style="width: 100%">
+        <option value="0" selected="selected">Disable</option>
+        <option value="1">Enable</option>
+      </select>
+      <small class="form-text text-muted"><i class="fas fa-info-circle me-1"></i>Enable this to let the relay recipient also access <strong>/admin</strong> while keeping their user-portal access.</small>
+    </div>
+
 
             <input type="submit" class="btn btn-danger" name="" value="Submit" class="form-control primary" onclick="this.disabled=true;this.value='Please wait...';this.form.submit();">
 
@@ -1018,6 +1028,17 @@ a, a:hover{
     <cfabort>
   <cfelseif form.enforce_mfa NEQ "0" AND form.enforce_mfa NEQ "1">
     <cfset m="Edit Relay Recipients: form.enforce_mfa is not 0 or 1">
+    <cfinclude template="./inc/error.cfm">
+    <cfabort>
+  </cfif>
+
+  <!--- FORM.SYSTEM_ADMIN --->
+  <cfif NOT StructKeyExists(form, "system_admin")>
+    <cfset m="Edit Relay Recipients: form.system_admin does not exist">
+    <cfinclude template="./inc/error.cfm">
+    <cfabort>
+  <cfelseif form.system_admin NEQ "0" AND form.system_admin NEQ "1">
+    <cfset m="Edit Relay Recipients: form.system_admin is not 0 or 1">
     <cfinclude template="./inc/error.cfm">
     <cfabort>
   </cfif>
@@ -1517,7 +1538,13 @@ modal markup don't need a rename cascade.)
   select recipients.id, recipients.id as theID, recipients.id as theOtherID, recipients.recipient,
     recipients.backend_server, recipients.backend_port, recipients.backend_tls,
     recipients.auth_type, recipients.remoteauth_domain, recipients.enforce_mfa,
-    policy.policy_name, user_settings.report_enabled as report_enabled, if(user_settings.train_bayes = 1, 'YES', 'NO') as train_bayes, if(user_settings.download_msg = 1, 'YES', 'NO') as download_msg, if(recipients.pdf_enabled = 1, 'YES', 'NO') as pdf_enabled, if(recipients.smime_enabled = '1', 'YES', 'NO') as smime_enabled, if(recipients.pgp_enabled = 1, 'YES', 'NO') as pgp_enabled, if(recipients.digital_sign = '1', 'YES', 'NO') as digital_sign, if(recipient_certificates.user_id is NULL, 'NO', 'YES') as cert, if(recipient_keystores.user_id is NULL, 'NO', 'YES') as keystore, COALESCE(user_settings.ldap_username, '') as ldap_username
+    policy.policy_name, user_settings.report_enabled as report_enabled, if(user_settings.train_bayes = 1, 'YES', 'NO') as train_bayes, if(user_settings.download_msg = 1, 'YES', 'NO') as download_msg, if(recipients.pdf_enabled = 1, 'YES', 'NO') as pdf_enabled, if(recipients.smime_enabled = '1', 'YES', 'NO') as smime_enabled, if(recipients.pgp_enabled = 1, 'YES', 'NO') as pgp_enabled, if(recipients.digital_sign = '1', 'YES', 'NO') as digital_sign, if(recipient_certificates.user_id is NULL, 'NO', 'YES') as cert, if(recipient_keystores.user_id is NULL, 'NO', 'YES') as keystore, COALESCE(user_settings.ldap_username, '') as ldap_username,
+    IF((
+      SELECT COUNT(*)
+      FROM system_users su
+      WHERE (su.email = recipients.recipient OR su.username = COALESCE(NULLIF(user_settings.ldap_username, ''), recipients.recipient))
+        AND su.applied = '1'
+    ) > 0, 'YES', 'NO') as system_admin
   from recipients LEFT JOIN policy ON recipients.policy_id = policy.id LEFT JOIN recipient_certificates ON recipients.id = recipient_certificates.user_id  LEFT JOIN recipient_keystores ON recipients.id = recipient_keystores.user_id  LEFT JOIN user_settings ON recipients.recipient = user_settings.email where recipients.domain is NULL and (recipients.recipient_type = 'relay' or recipients.recipient_type is null) group by recipients.id
 
   </cfquery>
@@ -1532,6 +1559,7 @@ modal markup don't need a rename cascade.)
             <th>S/MIME</th>
             <th>PGP</th>
             <th>Recipient</th>
+            <th>Admin</th>
             <th>Auth</th>
             <th>Backend</th>
             <th>2FA</th>
@@ -1561,6 +1589,7 @@ modal markup don't need a rename cascade.)
             <td><a href="view_recipient_certificates.cfm?type=1&id=#theID#" class="btn btn-secondary btn-sm" role="button"><i class="fas fa-user-shield"></i></a></td>
             <td><a href="view_recipient_keyrings.cfm?type=1&id=#theOtherID#" class="btn btn-secondary btn-sm" role="button"><i class="fas fa-user-lock"></i></a></td>
             <td>#recipient#</td>
+            <td><cfif system_admin EQ "YES"><span class="badge bg-success"><i class="fas fa-user-cog me-1"></i>YES</span><cfelse><span class="badge bg-secondary">NO</span></cfif></td>
             <td><cfif auth_type EQ "remote"><span class="badge bg-primary" title="#remoteauth_domain#"><i class="fas fa-cloud me-1"></i>REMOTE</span><cfelse><span class="badge bg-secondary">LOCAL</span></cfif></td>
             <td><cfif Len(Trim(backend_server)) GT 0><span class="text-primary" title="#backend_server#:#backend_port#">#backend_server#</span><cfelse><span class="text-muted">(domain default)</span></cfif></td>
             <td><!--- 2FA column: two orthogonal states, two independent pills.
@@ -1601,6 +1630,7 @@ modal markup don't need a rename cascade.)
             <th>S/MIME</th>
             <th>PGP</th>
             <th>Recipient</th>
+            <th>Admin</th>
             <th>Auth</th>
             <th>Backend</th>
             <th>2FA</th>

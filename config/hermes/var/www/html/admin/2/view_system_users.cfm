@@ -119,7 +119,8 @@ This file is part of Hermes Secure Email Gateway Community Edition.
   "99": {type:"danger",  msg:"The Password you are attempting to use has previously appeared in a data breach. Please use another password. Password was checked by <a href='https://haveibeenpwned.com/Passwords' target='_blank'>haveibeenpwned.com</a>"},
   "100":{type:"danger",  msg:"There was a problem accessing haveibeenpwned.com to check your password against previous data breaches. Either ensure Hermes SEG has outbound Internet access over 443 to <a href='https://api.pwnedpasswords.com'>https://api.pwnedpasswords.com</a> OR set the <strong>Check Password Against haveibeenpwned.com</strong> field to NO"},
   "30": {type:"success", msg:"User session(s) invalidated. The user will need to log in again on their next request."},
-  "31": {type:"success", msg:"All user sessions have been flushed. Every user will need to log in again."}
+  "31": {type:"success", msg:"All user sessions have been flushed. Every user will need to log in again."},
+  "32": {type:"success", msg:"System User was disabled successfully and any active sessions were invalidated."}
 }>
 
 <cfif structKeyExists(alerts, toString(m))>
@@ -171,7 +172,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
           <tr>
             <td>
               <button type="button" class="btn btn-sm btn-primary" title="Edit"
-                onclick="openEditModal(#id#, '#encodeForJavaScript(username)#', '#encodeForJavaScript(email)#', '#encodeForJavaScript(first_name)#', '#encodeForJavaScript(last_name)#', '#access_control#', '#auth_type#', '#encodeForJavaScript(remoteauth_domain)#', '#system#');">
+                onclick="openEditModal(#id#, '#encodeForJavaScript(username)#', '#encodeForJavaScript(email)#', '#encodeForJavaScript(first_name)#', '#encodeForJavaScript(last_name)#', '#access_control#', '#auth_type#', '#encodeForJavaScript(remoteauth_domain)#', '#system#', '#applied#');">
                 <i class="fas fa-edit"></i>
               </button>
               <button type="button" class="btn btn-sm btn-warning" title="Delete 2FA Devices"
@@ -369,6 +370,15 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             </div>
           </div>
           <div class="mb-3">
+            <label class="form-label"><strong>Active</strong></label>
+            <select class="form-select" name="active" id="edit_active">
+              <option value="1">YES</option>
+              <option value="0">NO</option>
+            </select>
+            <small class="form-text text-muted">Disabled system users cannot log in and any current session is invalidated when you save.</small>
+          </div>
+
+          <div class="mb-3">
             <label class="form-label"><strong>Access Control Policy</strong></label>
             <div class="alert alert-warning">
               <i class="icon fas fa-exclamation-triangle"></i> Before setting to <strong>Two Factor</strong>, ensure e-mail delivery works and the user's e-mail address is correct. See the <a href="#" onclick="window.open('https://docs.deeztek.com/books/administrator-guide/page/system-users#bkmrk-access-control-polic', '_blank'); return false;">Access Control Policy Documentation</a>.
@@ -517,12 +527,13 @@ document.getElementById('editSetPassword')?.addEventListener('change', function(
 });
 
 // Open Edit Modal
-function openEditModal(id, username, email, firstName, lastName, accessControl, authType, remoteauthDomain, system) {
+function openEditModal(id, username, email, firstName, lastName, accessControl, authType, remoteauthDomain, system, applied) {
   document.getElementById('edit_id').value = id;
   document.getElementById('edit_username').value = username;
   document.getElementById('edit_email').value = email;
   document.getElementById('edit_first_name').value = firstName;
   document.getElementById('edit_last_name').value = lastName;
+  document.getElementById('edit_active').value = applied === '1' ? '1' : '0';
   document.getElementById('edit_access_control').value = accessControl;
 
   // Auth type (read-only display)

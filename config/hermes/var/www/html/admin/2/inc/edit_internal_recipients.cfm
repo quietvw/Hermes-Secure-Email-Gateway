@@ -42,3 +42,81 @@ This file is part of Hermes Secure Email Gateway Community Edition.
     WHERE email        = <cfqueryparam value="#recipient#"         cfsqltype="cf_sql_varchar">
 </cfquery>
 <!--- EDIT USER_SETTINGS ENDS HERE --->
+
+<!--- RELAY RECIPIENT SYSTEM ADMIN SYNC --->
+<cfquery name="getRecipientAdminContext" datasource="hermes">
+    SELECT r.recipient, r.auth_type, r.remoteauth_domain, COALESCE(us.ldap_username, '') AS ldap_username
+    FROM recipients r
+    LEFT JOIN user_settings us ON us.email = r.recipient
+    WHERE r.id = <cfqueryparam value="#edit_id#" cfsqltype="cf_sql_integer">
+    LIMIT 1
+</cfquery>
+
+<cfif getRecipientAdminContext.recordcount GTE 1>
+    <cfset relayAdminUsername = getRecipientAdminContext.ldap_username NEQ "" ? LCase(getRecipientAdminContext.ldap_username) : LCase(getRecipientAdminContext.recipient)>
+
+    <cfquery name="getExistingSystemUser" datasource="hermes">
+        SELECT id
+        FROM system_users
+        WHERE username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">
+           OR email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">
+        LIMIT 1
+    </cfquery>
+
+    <cfif form.system_admin EQ "1">
+        <cfif getExistingSystemUser.recordcount GTE 1>
+            <cfquery datasource="hermes">
+                UPDATE system_users
+                SET username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">,
+                    email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">,
+                    auth_type = <cfqueryparam value="#getRecipientAdminContext.auth_type#" cfsqltype="cf_sql_varchar">,
+                    remoteauth_domain = <cfqueryparam value="#getRecipientAdminContext.remoteauth_domain#" cfsqltype="cf_sql_varchar" null="#(getRecipientAdminContext.remoteauth_domain EQ '')#">,
+                    ldap_synced = 1,
+                    applied = '1'
+                WHERE id = <cfqueryparam value="#getExistingSystemUser.id#" cfsqltype="cf_sql_integer">
+            </cfquery>
+        <cfelse>
+            <cfquery datasource="hermes">
+                INSERT INTO system_users
+                (username, email, first_name, last_name, system, access_control, applied, ldap_synced, auth_type, remoteauth_domain, password)
+                VALUES
+                (
+                    <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">,
+                    <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">,
+                    <cfqueryparam value="#ListFirst(getRecipientAdminContext.recipient, '@')#" cfsqltype="cf_sql_varchar">,
+                    <cfqueryparam value="User" cfsqltype="cf_sql_varchar">,
+                    '2',
+                    'one_factor',
+                    '1',
+                    1,
+                    <cfqueryparam value="#getRecipientAdminContext.auth_type#" cfsqltype="cf_sql_varchar">,
+                    <cfqueryparam value="#getRecipientAdminContext.remoteauth_domain#" cfsqltype="cf_sql_varchar" null="#(getRecipientAdminContext.remoteauth_domain EQ '')#">,
+                    ''
+                )
+            </cfquery>
+        </cfif>
+
+        <cfset ldapUsername = relayAdminUsername>
+        <cfset adminGroupAction = "add">
+        <cfinclude template="ldap_toggle_admin_group.cfm">
+    <cfelse>
+        <cfif getExistingSystemUser.recordcount GTE 1>
+            <cfquery datasource="hermes">
+                UPDATE system_users
+                SET username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">,
+                    email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">,
+                    auth_type = <cfqueryparam value="#getRecipientAdminContext.auth_type#" cfsqltype="cf_sql_varchar">,
+                    remoteauth_domain = <cfqueryparam value="#getRecipientAdminContext.remoteauth_domain#" cfsqltype="cf_sql_varchar" null="#(getRecipientAdminContext.remoteauth_domain EQ '')#">,
+                    applied = '0'
+                WHERE id = <cfqueryparam value="#getExistingSystemUser.id#" cfsqltype="cf_sql_integer">
+            </cfquery>
+        </cfif>
+
+        <cfset ldapUsername = relayAdminUsername>
+        <cfset adminGroupAction = "remove">
+        <cfinclude template="ldap_toggle_admin_group.cfm">
+
+        <cfset targetSessionUser = relayAdminUsername>
+        <cfinclude template="invalidate_user_sessions.cfm">
+    </cfif>
+</cfif>

@@ -35,7 +35,13 @@ Expects: form.id (recipients.id)
     SELECT r.id, r.recipient, r.policy_id, r.enforce_mfa,
            r.auth_type, r.remoteauth_domain,
            us.report_enabled, us.train_bayes, us.download_msg,
-           COALESCE(us.ldap_username, '') AS ldap_username
+           COALESCE(us.ldap_username, '') AS ldap_username,
+           IF((
+               SELECT COUNT(*)
+               FROM system_users su
+               WHERE (su.email = r.recipient OR su.username = COALESCE(NULLIF(us.ldap_username, ''), r.recipient))
+                 AND su.applied = '1'
+           ) > 0, 1, 0) AS system_admin
     FROM recipients r
     LEFT JOIN user_settings us ON us.email = r.recipient
     WHERE r.id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
@@ -59,7 +65,8 @@ Expects: form.id (recipients.id)
     "report_enabled": "#JSStringFormat(getRecipient.report_enabled)#",
     "train_bayes": #Val(getRecipient.train_bayes)#,
     "download_msg": #Val(getRecipient.download_msg)#,
-    "ldap_username": "#JSStringFormat(getRecipient.ldap_username)#"
+    "ldap_username": "#JSStringFormat(getRecipient.ldap_username)#",
+    "system_admin": #Val(getRecipient.system_admin)#
 }
 </cfprocessingdirective>
 </cfoutput>
