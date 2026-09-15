@@ -45,7 +45,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 
 <!--- RELAY RECIPIENT SYSTEM ADMIN SYNC --->
 <cfquery name="getRecipientAdminContext" datasource="hermes">
-    SELECT r.recipient, r.auth_type, r.remoteauth_domain, COALESCE(us.ldap_username, '') AS ldap_username
+    SELECT r.recipient, r.auth_type, r.remoteauth_domain, r.enforce_mfa, COALESCE(us.ldap_username, '') AS ldap_username
     FROM recipients r
     LEFT JOIN user_settings us ON us.email = r.recipient
     WHERE r.id = <cfqueryparam value="#edit_id#" cfsqltype="cf_sql_integer">
@@ -54,6 +54,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 
 <cfif getRecipientAdminContext.recordcount GTE 1>
     <cfset relayAdminUsername = Len(Trim(getRecipientAdminContext.ldap_username)) GT 0 ? LCase(Trim(getRecipientAdminContext.ldap_username)) : LCase(getRecipientAdminContext.recipient)>
+    <cfset relayAdminAccessControl = getRecipientAdminContext.enforce_mfa EQ 1 ? "two_factor" : "one_factor">
 
     <cfquery name="getSystemUserByUsername" datasource="hermes">
         SELECT id, username, email, system
@@ -121,6 +122,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 UPDATE system_users
                 SET username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">,
                     email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">,
+                    access_control = <cfqueryparam value="#relayAdminAccessControl#" cfsqltype="cf_sql_varchar">,
                     auth_type = <cfqueryparam value="#getRecipientAdminContext.auth_type#" cfsqltype="cf_sql_varchar">,
                     remoteauth_domain = <cfqueryparam value="#getRecipientAdminContext.remoteauth_domain#" cfsqltype="cf_sql_varchar" null="#(getRecipientAdminContext.remoteauth_domain EQ '')#">,
                     ldap_synced = 1,
@@ -153,7 +155,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                     <cfqueryparam value="#ListFirst(getRecipientAdminContext.recipient, '@')#" cfsqltype="cf_sql_varchar">,
                     <cfqueryparam value="User" cfsqltype="cf_sql_varchar">,
                     '3',
-                    'one_factor',
+                    <cfqueryparam value="#relayAdminAccessControl#" cfsqltype="cf_sql_varchar">,
                     '1',
                     1,
                     <cfqueryparam value="#getRecipientAdminContext.auth_type#" cfsqltype="cf_sql_varchar">,
