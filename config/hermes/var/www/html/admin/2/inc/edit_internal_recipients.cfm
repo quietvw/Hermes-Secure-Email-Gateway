@@ -111,6 +111,12 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 
     <cfif form.system_admin EQ "1">
         <cfif targetSystemUserId GT 0>
+            <cfif Len(Trim(targetSystemUserUsername)) GT 0 AND targetSystemUserUsername NEQ relayAdminUsername>
+                <cfset ldapUsername = targetSystemUserUsername>
+                <cfset adminGroupAction = "remove">
+                <cfinclude template="ldap_toggle_admin_group.cfm">
+            </cfif>
+
             <cfquery datasource="hermes">
                 UPDATE system_users
                 SET username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">,
@@ -169,11 +175,19 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 SET applied = '0'
                 WHERE id = <cfqueryparam value="#targetSystemUserId#" cfsqltype="cf_sql_integer">
             </cfquery>
-            <cfif Len(Trim(targetSystemUserUsername)) GT 0>
-                <cfset ldapUsername = targetSystemUserUsername>
+
+            <cfset relayAdminGroupRemovalTargets = "">
+            <cfloop list="#targetSystemUserUsername#,#relayAdminUsername#" index="candidateAdminUsername">
+                <cfset candidateAdminUsername = Trim(candidateAdminUsername)>
+                <cfif Len(candidateAdminUsername) GT 0 AND NOT ListFindNoCase(relayAdminGroupRemovalTargets, candidateAdminUsername)>
+                    <cfset relayAdminGroupRemovalTargets = ListAppend(relayAdminGroupRemovalTargets, candidateAdminUsername)>
+                </cfif>
+            </cfloop>
+
+            <cfloop list="#relayAdminGroupRemovalTargets#" index="ldapUsername">
                 <cfset adminGroupAction = "remove">
                 <cfinclude template="ldap_toggle_admin_group.cfm">
-            </cfif>
+            </cfloop>
 
             <cfset relayAdminSessionTargets = "">
             <cfloop list="#targetSystemUserUsername#,#targetSystemUserEmail#,#relayAdminUsername#,#getRecipientAdminContext.recipient#" index="candidateSessionUser">
