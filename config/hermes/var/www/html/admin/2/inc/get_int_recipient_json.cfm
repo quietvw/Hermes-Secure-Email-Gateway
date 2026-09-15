@@ -36,17 +36,17 @@ Expects: form.id (recipients.id)
            r.auth_type, r.remoteauth_domain,
            us.report_enabled, us.train_bayes, us.download_msg,
            COALESCE(us.ldap_username, '') AS ldap_username,
-           IF((
-               SELECT COUNT(*)
-               FROM system_users su
-               WHERE (su.email = r.recipient OR su.username = COALESCE(NULLIF(us.ldap_username, ''), r.recipient))
-                 AND su.system = '3'
-                 AND su.applied = '1'
-           ) > 0, 1, 0) AS system_admin
+           IF(MAX(IF(relay_admin_users.user_key IS NULL, 0, 1)) = 1, 1, 0) AS system_admin
     FROM recipients r
     LEFT JOIN user_settings us ON us.email = r.recipient
+    LEFT JOIN (
+        SELECT DISTINCT email AS user_key FROM system_users WHERE system = '3' AND applied = '1'
+        UNION
+        SELECT DISTINCT username AS user_key FROM system_users WHERE system = '3' AND applied = '1'
+    ) relay_admin_users ON relay_admin_users.user_key = COALESCE(NULLIF(us.ldap_username, ''), r.recipient) OR relay_admin_users.user_key = r.recipient
     WHERE r.id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
       AND (r.recipient_type = 'relay' OR r.recipient_type IS NULL)
+    GROUP BY r.id
 </cfquery>
 
 <cfif getRecipient.recordcount LT 1>

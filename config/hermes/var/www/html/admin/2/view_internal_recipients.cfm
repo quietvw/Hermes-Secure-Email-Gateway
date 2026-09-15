@@ -1539,14 +1539,8 @@ modal markup don't need a rename cascade.)
     recipients.backend_server, recipients.backend_port, recipients.backend_tls,
     recipients.auth_type, recipients.remoteauth_domain, recipients.enforce_mfa,
     policy.policy_name, user_settings.report_enabled as report_enabled, if(user_settings.train_bayes = 1, 'YES', 'NO') as train_bayes, if(user_settings.download_msg = 1, 'YES', 'NO') as download_msg, if(recipients.pdf_enabled = 1, 'YES', 'NO') as pdf_enabled, if(recipients.smime_enabled = '1', 'YES', 'NO') as smime_enabled, if(recipients.pgp_enabled = 1, 'YES', 'NO') as pgp_enabled, if(recipients.digital_sign = '1', 'YES', 'NO') as digital_sign, if(recipient_certificates.user_id is NULL, 'NO', 'YES') as cert, if(recipient_keystores.user_id is NULL, 'NO', 'YES') as keystore, COALESCE(user_settings.ldap_username, '') as ldap_username,
-    IF((
-      SELECT COUNT(*)
-      FROM system_users su
-      WHERE (su.email = recipients.recipient OR su.username = COALESCE(NULLIF(user_settings.ldap_username, ''), recipients.recipient))
-        AND su.system = '3'
-        AND su.applied = '1'
-    ) > 0, 'YES', 'NO') as system_admin
-  from recipients LEFT JOIN policy ON recipients.policy_id = policy.id LEFT JOIN recipient_certificates ON recipients.id = recipient_certificates.user_id  LEFT JOIN recipient_keystores ON recipients.id = recipient_keystores.user_id  LEFT JOIN user_settings ON recipients.recipient = user_settings.email where recipients.domain is NULL and (recipients.recipient_type = 'relay' or recipients.recipient_type is null) group by recipients.id
+    IF(MAX(IF(relay_admin_users.user_key IS NULL, 0, 1)) = 1, 'YES', 'NO') as system_admin
+  from recipients LEFT JOIN policy ON recipients.policy_id = policy.id LEFT JOIN recipient_certificates ON recipients.id = recipient_certificates.user_id  LEFT JOIN recipient_keystores ON recipients.id = recipient_keystores.user_id  LEFT JOIN user_settings ON recipients.recipient = user_settings.email LEFT JOIN (SELECT DISTINCT email AS user_key FROM system_users WHERE system = '3' AND applied = '1' UNION SELECT DISTINCT username AS user_key FROM system_users WHERE system = '3' AND applied = '1') relay_admin_users ON relay_admin_users.user_key = COALESCE(NULLIF(user_settings.ldap_username, ''), recipients.recipient) OR relay_admin_users.user_key = recipients.recipient where recipients.domain is NULL and (recipients.recipient_type = 'relay' or recipients.recipient_type is null) group by recipients.id
 
   </cfquery>
     

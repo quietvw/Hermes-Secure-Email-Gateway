@@ -63,6 +63,21 @@ function escapeLdapRdnValue(rawValue) {
 function escapeCommandArgument(rawValue) {
     return Chr(34) & Replace(ToString(arguments.rawValue), Chr(34), "\" & Chr(34), "all") & Chr(34);
 }
+
+function isBenignAdminGroupMessage(rawMessage, groupAction) {
+    var message = ToString(arguments.rawMessage);
+
+    if (arguments.groupAction EQ "add") {
+        return message CONTAINS "already exists" OR message CONTAINS "Type or value exists";
+    }
+
+    return message CONTAINS "No such attribute" OR message CONTAINS "no such value";
+}
+
+function hasLdapFailure(rawMessage) {
+    var message = ToString(arguments.rawMessage);
+    return message CONTAINS "ldap_modify:" OR message CONTAINS "ldapmodify:";
+}
 </cfscript>
 
 <cfif Len(Trim(ldapUsername)) GT 0 AND ListFindNoCase("add,remove", adminGroupAction)>
@@ -98,10 +113,9 @@ function escapeCommandArgument(rawValue) {
 
         <cfif Len(Trim(ldapModifyError)) GT 0>
             <cfset benignErrors = ldapModifyError>
-            <cfif (adminGroupAction EQ "add" AND (benignErrors CONTAINS "already exists" OR benignErrors CONTAINS "Type or value exists"))
-               OR (adminGroupAction EQ "remove" AND (benignErrors CONTAINS "No such attribute" OR benignErrors CONTAINS "no such value"))>
+            <cfif isBenignAdminGroupMessage(benignErrors, adminGroupAction)>
                 <!--- Desired end-state already achieved. --->
-            <cfelse>
+            <cfelseif hasLdapFailure(benignErrors)>
                 <cfif FileExists(fileToDelete)>
                     <cffile action="delete" file="#fileToDelete#">
                 </cfif>
@@ -113,8 +127,7 @@ function escapeCommandArgument(rawValue) {
 
     <cfcatch type="any">
         <cfset benignErrors = (isDefined("ldapModifyError") ? ldapModifyError : "") & " " & cfcatch.detail>
-        <cfif (adminGroupAction EQ "add" AND (benignErrors CONTAINS "already exists" OR benignErrors CONTAINS "Type or value exists"))
-           OR (adminGroupAction EQ "remove" AND (benignErrors CONTAINS "No such attribute" OR benignErrors CONTAINS "no such value"))>
+        <cfif isBenignAdminGroupMessage(benignErrors, adminGroupAction)>
             <!--- Desired end-state already achieved. --->
         <cfelse>
             <cfif FileExists(fileToDelete)>

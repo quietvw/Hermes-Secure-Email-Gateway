@@ -327,9 +327,18 @@ All LDAP includes are reused as-is.
       UPDATE system_users SET applied = '0' WHERE id = <cfqueryparam value="#theID#" cfsqltype="cf_sql_integer">
     </cfquery>
 
-    <cfset ldapUsername = form.username>
-    <cfset adminGroupAction = "remove">
-    <cfinclude template="ldap_toggle_admin_group.cfm">
+    <cfset disabledAdminGroupTargets = "">
+    <cfloop list="#getuser.username#,#form.username#" index="candidateAdminUsername">
+      <cfset candidateAdminUsername = Trim(candidateAdminUsername)>
+      <cfif Len(candidateAdminUsername) GT 0 AND NOT ListFindNoCase(disabledAdminGroupTargets, candidateAdminUsername)>
+        <cfset disabledAdminGroupTargets = ListAppend(disabledAdminGroupTargets, candidateAdminUsername)>
+      </cfif>
+    </cfloop>
+
+    <cfloop list="#disabledAdminGroupTargets#" index="ldapUsername">
+      <cfset adminGroupAction = "remove">
+      <cfinclude template="ldap_toggle_admin_group.cfm">
+    </cfloop>
 
     <cfset targetSessionUser = form.username>
     <cfinclude template="invalidate_user_sessions.cfm">
@@ -371,6 +380,11 @@ All LDAP includes are reused as-is.
     </cfif>
 
     <cfif getuser.system EQ "3" AND Len(Trim(form.username)) GT 0>
+      <cfif Len(Trim(getuser.username)) GT 0 AND getuser.username NEQ form.username>
+        <cfset ldapUsername = getuser.username>
+        <cfset adminGroupAction = "remove">
+        <cfinclude template="ldap_toggle_admin_group.cfm">
+      </cfif>
       <cfset ldapUsername = form.username>
       <cfset adminGroupAction = "add">
       <cfinclude template="ldap_toggle_admin_group.cfm">
@@ -412,6 +426,11 @@ All LDAP includes are reused as-is.
     </cfif>
 
     <cfif getuser.system EQ "3" AND Len(Trim(form.username)) GT 0>
+      <cfif Len(Trim(getuser.username)) GT 0 AND getuser.username NEQ form.username>
+        <cfset ldapUsername = getuser.username>
+        <cfset adminGroupAction = "remove">
+        <cfinclude template="ldap_toggle_admin_group.cfm">
+      </cfif>
       <cfset ldapUsername = form.username>
       <cfset adminGroupAction = "add">
       <cfinclude template="ldap_toggle_admin_group.cfm">
@@ -477,6 +496,11 @@ All LDAP includes are reused as-is.
     </cfif>
 
     <cfif getuser.system EQ "3" AND Len(Trim(form.username)) GT 0>
+      <cfif Len(Trim(getuser.username)) GT 0 AND getuser.username NEQ form.username>
+        <cfset ldapUsername = getuser.username>
+        <cfset adminGroupAction = "remove">
+        <cfinclude template="ldap_toggle_admin_group.cfm">
+      </cfif>
       <cfset ldapUsername = form.username>
       <cfset adminGroupAction = "add">
       <cfinclude template="ldap_toggle_admin_group.cfm">
