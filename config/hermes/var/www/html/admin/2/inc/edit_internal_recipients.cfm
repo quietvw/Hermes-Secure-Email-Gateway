@@ -56,7 +56,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
     <cfset relayAdminUsername = getRecipientAdminContext.ldap_username NEQ "" ? LCase(getRecipientAdminContext.ldap_username) : LCase(getRecipientAdminContext.recipient)>
 
     <cfquery name="getExistingSystemUser" datasource="hermes">
-        SELECT id
+        SELECT id, username, email
         FROM system_users
         WHERE username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">
            OR email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">
@@ -116,7 +116,21 @@ This file is part of Hermes Secure Email Gateway Community Edition.
         <cfset adminGroupAction = "remove">
         <cfinclude template="ldap_toggle_admin_group.cfm">
 
-        <cfset targetSessionUser = relayAdminUsername>
-        <cfinclude template="invalidate_user_sessions.cfm">
+        <cfif getExistingSystemUser.recordcount GTE 1 AND Len(Trim(getExistingSystemUser.username)) GT 0>
+            <cfset targetSessionUser = getExistingSystemUser.username>
+            <cfinclude template="invalidate_user_sessions.cfm">
+        </cfif>
+        <cfif getExistingSystemUser.recordcount GTE 1 AND Len(Trim(getExistingSystemUser.email)) GT 0 AND getExistingSystemUser.email NEQ getExistingSystemUser.username>
+            <cfset targetSessionUser = getExistingSystemUser.email>
+            <cfinclude template="invalidate_user_sessions.cfm">
+        </cfif>
+        <cfif relayAdminUsername NEQ "" AND (getExistingSystemUser.recordcount LT 1 OR relayAdminUsername NEQ getExistingSystemUser.username)>
+            <cfset targetSessionUser = relayAdminUsername>
+            <cfinclude template="invalidate_user_sessions.cfm">
+        </cfif>
+        <cfif getRecipientAdminContext.recipient NEQ "" AND (getExistingSystemUser.recordcount LT 1 OR getRecipientAdminContext.recipient NEQ getExistingSystemUser.email)>
+            <cfset targetSessionUser = getRecipientAdminContext.recipient>
+            <cfinclude template="invalidate_user_sessions.cfm">
+        </cfif>
     </cfif>
 </cfif>

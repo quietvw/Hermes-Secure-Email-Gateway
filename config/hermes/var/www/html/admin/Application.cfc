@@ -249,7 +249,7 @@ the url: https://#ConsoleHost#</cfoutput>
        </CFQUERY>
 
        <cfif #checkuser.recordcount# LT 1>
-       <cfset m="Appplication.cfc: system user is disabled or unauthorized">
+       <cfset m="Application.cfc: system user is disabled or unauthorized">
        <cfinclude template="/admin/2/inc/error.cfm">
        <cfabort>
 

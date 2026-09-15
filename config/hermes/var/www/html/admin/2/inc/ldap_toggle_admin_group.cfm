@@ -57,6 +57,21 @@ Benign states are treated as success:
             timeout="60">
         </cfexecute>
 
+        <cfif Len(Trim(ldapModifyError)) GT 0>
+            <cfset benignErrors = ldapModifyError>
+            <cfif (adminGroupAction EQ "add" AND (benignErrors CONTAINS "already exists" OR benignErrors CONTAINS "Type or value exists"))
+               OR (adminGroupAction EQ "remove" AND (benignErrors CONTAINS "No such attribute" OR benignErrors CONTAINS "no such value"))>
+                <!--- Desired end-state already achieved. --->
+            <cfelse>
+                <cfif FileExists(fileToDelete)>
+                    <cffile action="delete" file="#fileToDelete#">
+                </cfif>
+                <cfset m="LDAP Toggle Admin Group: #ldapModifyError#">
+                <cfinclude template="error.cfm">
+                <cfabort>
+            </cfif>
+        </cfif>
+
     <cfcatch type="any">
         <cfset benignErrors = (isDefined("ldapModifyError") ? ldapModifyError : "") & " " & cfcatch.detail>
         <cfif (adminGroupAction EQ "add" AND (benignErrors CONTAINS "already exists" OR benignErrors CONTAINS "Type or value exists"))
