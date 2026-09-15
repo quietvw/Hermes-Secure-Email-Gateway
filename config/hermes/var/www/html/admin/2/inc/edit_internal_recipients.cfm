@@ -121,6 +121,21 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                     applied = '1'
                 WHERE id = <cfqueryparam value="#targetSystemUserId#" cfsqltype="cf_sql_integer">
             </cfquery>
+
+            <cfset relayAdminSessionTargets = "">
+            <cfloop list="#targetSystemUserUsername#,#targetSystemUserEmail#" index="candidateSessionUser">
+                <cfset candidateSessionUser = Trim(candidateSessionUser)>
+                <cfif Len(candidateSessionUser) GT 0
+                    AND candidateSessionUser NEQ relayAdminUsername
+                    AND candidateSessionUser NEQ getRecipientAdminContext.recipient
+                    AND NOT ListFindNoCase(relayAdminSessionTargets, candidateSessionUser)>
+                    <cfset relayAdminSessionTargets = ListAppend(relayAdminSessionTargets, candidateSessionUser)>
+                </cfif>
+            </cfloop>
+
+            <cfloop list="#relayAdminSessionTargets#" index="targetSessionUser">
+                <cfinclude template="invalidate_user_sessions.cfm">
+            </cfloop>
         <cfelse>
             <cfquery datasource="hermes">
                 INSERT INTO system_users
