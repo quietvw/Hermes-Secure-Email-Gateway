@@ -31,17 +31,48 @@ Benign states are treated as success:
 <cfparam name="ldapUsername" default="">
 <cfparam name="adminGroupAction" default="add">
 
+<cfscript>
+function escapeLdapRdnValue(rawValue) {
+    var value = ToString(arguments.rawValue);
+    var escaped = "";
+    var i = 1;
+    var ch = "";
+
+    for (i = 1; i <= Len(value); i++) {
+        ch = Mid(value, i, 1);
+
+        if ((i EQ 1 AND (ch EQ " " OR ch EQ Chr(35)))
+            OR (i EQ Len(value) AND ch EQ " ")
+            OR ch EQ "\"
+            OR ch EQ ","
+            OR ch EQ "+"
+            OR ch EQ Chr(34)
+            OR ch EQ "<"
+            OR ch EQ ">"
+            OR ch EQ ";"
+            OR ch EQ "=") {
+            escaped &= "\" & ch;
+        } else {
+            escaped &= ch;
+        }
+    }
+
+    return escaped;
+}
+</cfscript>
+
 <cfif Len(Trim(ldapUsername)) GT 0 AND ListFindNoCase("add,remove", adminGroupAction)>
     <cfinclude template="generate_customtrans.cfm">
 
     <cfset ldapModifyResult = "">
     <cfset ldapModifyError = "">
     <cfset fileToDelete = "/opt/hermes/tmp/#customtrans3#_toggle_admin_group.ldif">
+    <cfset ldapEscapedUsername = escapeLdapRdnValue(ldapUsername)>
 
     <cfif adminGroupAction EQ "add">
-        <cfset ldapGroupActionLdif = "dn: cn=admins,ou=groups,dc=hermes,dc=local#Chr(10)#changetype: modify#Chr(10)#add: member#Chr(10)#member: cn=#ldapUsername#,ou=users,dc=hermes,dc=local#Chr(10)#">
+        <cfset ldapGroupActionLdif = "dn: cn=admins,ou=groups,dc=hermes,dc=local#Chr(10)#changetype: modify#Chr(10)#add: member#Chr(10)#member: cn=#ldapEscapedUsername#,ou=users,dc=hermes,dc=local#Chr(10)#">
     <cfelse>
-        <cfset ldapGroupActionLdif = "dn: cn=admins,ou=groups,dc=hermes,dc=local#Chr(10)#changetype: modify#Chr(10)#delete: member#Chr(10)#member: cn=#ldapUsername#,ou=users,dc=hermes,dc=local#Chr(10)#">
+        <cfset ldapGroupActionLdif = "dn: cn=admins,ou=groups,dc=hermes,dc=local#Chr(10)#changetype: modify#Chr(10)#delete: member#Chr(10)#member: cn=#ldapEscapedUsername#,ou=users,dc=hermes,dc=local#Chr(10)#">
     </cfif>
 
     <cftry>
