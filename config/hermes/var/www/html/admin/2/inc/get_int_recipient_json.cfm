@@ -40,6 +40,7 @@ Expects: form.id (recipients.id)
                SELECT COUNT(*)
                FROM system_users su
                WHERE (su.email = r.recipient OR su.username = COALESCE(NULLIF(us.ldap_username, ''), r.recipient))
+                 AND su.system = '3'
                  AND su.applied = '1'
            ) > 0, 1, 0) AS system_admin
     FROM recipients r

@@ -1543,6 +1543,7 @@ modal markup don't need a rename cascade.)
       SELECT COUNT(*)
       FROM system_users su
       WHERE (su.email = recipients.recipient OR su.username = COALESCE(NULLIF(user_settings.ldap_username, ''), recipients.recipient))
+        AND su.system = '3'
         AND su.applied = '1'
     ) > 0, 'YES', 'NO') as system_admin
   from recipients LEFT JOIN policy ON recipients.policy_id = policy.id LEFT JOIN recipient_certificates ON recipients.id = recipient_certificates.user_id  LEFT JOIN recipient_keystores ON recipients.id = recipient_keystores.user_id  LEFT JOIN user_settings ON recipients.recipient = user_settings.email where recipients.domain is NULL and (recipients.recipient_type = 'relay' or recipients.recipient_type is null) group by recipients.id

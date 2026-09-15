@@ -56,16 +56,34 @@ This file is part of Hermes Secure Email Gateway Community Edition.
     <cfset relayAdminUsername = getRecipientAdminContext.ldap_username NEQ "" ? LCase(getRecipientAdminContext.ldap_username) : LCase(getRecipientAdminContext.recipient)>
 
     <cfquery name="getSystemUserByUsername" datasource="hermes">
-        SELECT id, username, email
+        SELECT id, username, email, system
         FROM system_users
         WHERE username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">
+          AND system = '3'
         LIMIT 1
     </cfquery>
 
     <cfquery name="getSystemUserByEmail" datasource="hermes">
-        SELECT id, username, email
+        SELECT id, username, email, system
         FROM system_users
         WHERE email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">
+          AND system = '3'
+        LIMIT 1
+    </cfquery>
+
+    <cfquery name="getConflictingSystemUserByUsername" datasource="hermes">
+        SELECT id
+        FROM system_users
+        WHERE username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">
+          AND (system IS NULL OR system <> '3')
+        LIMIT 1
+    </cfquery>
+
+    <cfquery name="getConflictingSystemUserByEmail" datasource="hermes">
+        SELECT id
+        FROM system_users
+        WHERE email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">
+          AND (system IS NULL OR system <> '3')
         LIMIT 1
     </cfquery>
 
@@ -75,6 +93,10 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 
     <cfif getSystemUserByUsername.recordcount GTE 1 AND getSystemUserByEmail.recordcount GTE 1 AND getSystemUserByUsername.id NEQ getSystemUserByEmail.id>
         <cfset m="Edit Relay Recipients: conflicting system user records matched by username/email">
+        <cfinclude template="error.cfm">
+        <cfabort>
+    <cfelseif getConflictingSystemUserByUsername.recordcount GTE 1 OR getConflictingSystemUserByEmail.recordcount GTE 1>
+        <cfset m="Edit Relay Recipients: relay admin toggle conflicts with an existing dedicated system user">
         <cfinclude template="error.cfm">
         <cfabort>
     <cfelseif getSystemUserByUsername.recordcount GTE 1>
@@ -93,8 +115,6 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 UPDATE system_users
                 SET username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">,
                     email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">,
-                    system = '2',
-                    access_control = 'one_factor',
                     auth_type = <cfqueryparam value="#getRecipientAdminContext.auth_type#" cfsqltype="cf_sql_varchar">,
                     remoteauth_domain = <cfqueryparam value="#getRecipientAdminContext.remoteauth_domain#" cfsqltype="cf_sql_varchar" null="#(getRecipientAdminContext.remoteauth_domain EQ '')#">,
                     ldap_synced = 1,
@@ -111,7 +131,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                     <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">,
                     <cfqueryparam value="#ListFirst(getRecipientAdminContext.recipient, '@')#" cfsqltype="cf_sql_varchar">,
                     <cfqueryparam value="User" cfsqltype="cf_sql_varchar">,
-                    '2',
+                    '3',
                     'one_factor',
                     '1',
                     1,
@@ -122,43 +142,38 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             </cfquery>
         </cfif>
 
-        <cfset ldapUsername = relayAdminUsername>
-        <cfset adminGroupAction = "add">
-        <cfinclude template="ldap_toggle_admin_group.cfm">
+        <cfif targetSystemUserId GT 0 OR (getConflictingSystemUserByUsername.recordcount EQ 0 AND getConflictingSystemUserByEmail.recordcount EQ 0)>
+            <cfset ldapUsername = relayAdminUsername>
+            <cfset adminGroupAction = "add">
+            <cfinclude template="ldap_toggle_admin_group.cfm">
+        </cfif>
     <cfelse>
         <cfif targetSystemUserId GT 0>
             <cfquery datasource="hermes">
                 UPDATE system_users
-                SET username = <cfqueryparam value="#relayAdminUsername#" cfsqltype="cf_sql_varchar">,
-                    email = <cfqueryparam value="#getRecipientAdminContext.recipient#" cfsqltype="cf_sql_varchar">,
-                    system = '2',
-                    access_control = 'one_factor',
-                    auth_type = <cfqueryparam value="#getRecipientAdminContext.auth_type#" cfsqltype="cf_sql_varchar">,
-                    remoteauth_domain = <cfqueryparam value="#getRecipientAdminContext.remoteauth_domain#" cfsqltype="cf_sql_varchar" null="#(getRecipientAdminContext.remoteauth_domain EQ '')#">,
-                    applied = '0'
+                SET applied = '0'
                 WHERE id = <cfqueryparam value="#targetSystemUserId#" cfsqltype="cf_sql_integer">
             </cfquery>
-        </cfif>
+            <cfset ldapUsername = relayAdminUsername>
+            <cfset adminGroupAction = "remove">
+            <cfinclude template="ldap_toggle_admin_group.cfm">
 
-        <cfset ldapUsername = relayAdminUsername>
-        <cfset adminGroupAction = "remove">
-        <cfinclude template="ldap_toggle_admin_group.cfm">
-
-        <cfif targetSystemUserId GT 0 AND Len(Trim(targetSystemUserUsername)) GT 0>
-            <cfset targetSessionUser = targetSystemUserUsername>
-            <cfinclude template="invalidate_user_sessions.cfm">
-        </cfif>
-        <cfif targetSystemUserId GT 0 AND Len(Trim(targetSystemUserEmail)) GT 0 AND targetSystemUserEmail NEQ targetSystemUserUsername>
-            <cfset targetSessionUser = targetSystemUserEmail>
-            <cfinclude template="invalidate_user_sessions.cfm">
-        </cfif>
-        <cfif relayAdminUsername NEQ "" AND (targetSystemUserId EQ 0 OR relayAdminUsername NEQ targetSystemUserUsername)>
-            <cfset targetSessionUser = relayAdminUsername>
-            <cfinclude template="invalidate_user_sessions.cfm">
-        </cfif>
-        <cfif getRecipientAdminContext.recipient NEQ "" AND (targetSystemUserId EQ 0 OR getRecipientAdminContext.recipient NEQ targetSystemUserEmail)>
-            <cfset targetSessionUser = getRecipientAdminContext.recipient>
-            <cfinclude template="invalidate_user_sessions.cfm">
+            <cfif Len(Trim(targetSystemUserUsername)) GT 0>
+                <cfset targetSessionUser = targetSystemUserUsername>
+                <cfinclude template="invalidate_user_sessions.cfm">
+            </cfif>
+            <cfif Len(Trim(targetSystemUserEmail)) GT 0 AND targetSystemUserEmail NEQ targetSystemUserUsername>
+                <cfset targetSessionUser = targetSystemUserEmail>
+                <cfinclude template="invalidate_user_sessions.cfm">
+            </cfif>
+            <cfif relayAdminUsername NEQ "" AND relayAdminUsername NEQ targetSystemUserUsername>
+                <cfset targetSessionUser = relayAdminUsername>
+                <cfinclude template="invalidate_user_sessions.cfm">
+            </cfif>
+            <cfif getRecipientAdminContext.recipient NEQ "" AND getRecipientAdminContext.recipient NEQ targetSystemUserEmail>
+                <cfset targetSessionUser = getRecipientAdminContext.recipient>
+                <cfinclude template="invalidate_user_sessions.cfm">
+            </cfif>
         </cfif>
     </cfif>
 </cfif>

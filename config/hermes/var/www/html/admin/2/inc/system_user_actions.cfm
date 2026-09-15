@@ -370,8 +370,11 @@ All LDAP includes are reused as-is.
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
 
-    <cfset adminGroupAction = "add">
-    <cfinclude template="ldap_toggle_admin_group.cfm">
+    <cfif Len(Trim(form.username)) GT 0>
+      <cfset ldapUsername = form.username>
+      <cfset adminGroupAction = "add">
+      <cfinclude template="ldap_toggle_admin_group.cfm">
+    </cfif>
 
     <cfset session.m = 18>
     <cflocation url="view_system_users.cfm" addtoken="no">
@@ -408,8 +411,11 @@ All LDAP includes are reused as-is.
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
 
-    <cfset adminGroupAction = "add">
-    <cfinclude template="ldap_toggle_admin_group.cfm">
+    <cfif Len(Trim(form.username)) GT 0>
+      <cfset ldapUsername = form.username>
+      <cfset adminGroupAction = "add">
+      <cfinclude template="ldap_toggle_admin_group.cfm">
+    </cfif>
 
     <cfset session.m = 14>
     <cflocation url="view_system_users.cfm" addtoken="no">
@@ -470,8 +476,11 @@ All LDAP includes are reused as-is.
       <cfinclude template="ldap_change_user_access_control.cfm">
     </cfif>
 
-    <cfset adminGroupAction = "add">
-    <cfinclude template="ldap_toggle_admin_group.cfm">
+    <cfif Len(Trim(form.username)) GT 0>
+      <cfset ldapUsername = form.username>
+      <cfset adminGroupAction = "add">
+      <cfinclude template="ldap_toggle_admin_group.cfm">
+    </cfif>
 
     <cfset session.m = 14>
     <cflocation url="view_system_users.cfm" addtoken="no">
