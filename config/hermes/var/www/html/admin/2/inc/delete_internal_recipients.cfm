@@ -127,9 +127,57 @@
         SELECT ldap_username FROM user_settings WHERE email = '#recipient#'
     </cfquery>
 
-    <cfif getLdapUsername.recordcount GTE 1 AND getLdapUsername.ldap_username NEQ "">
-        <cfset ldapUsername = getLdapUsername.ldap_username>
+    <cfquery name="getRelayManagedSystemUsers" datasource="hermes">
+        SELECT id, username, email
+        FROM system_users
+        WHERE system = '3'
+          AND (
+            email = <cfqueryparam value="#recipient#" cfsqltype="cf_sql_varchar">
+            OR username = <cfqueryparam value="#recipient#" cfsqltype="cf_sql_varchar">
+            <cfif getLdapUsername.recordcount GTE 1 AND Len(Trim(getLdapUsername.ldap_username)) GT 0>
+            OR username = <cfqueryparam value="#Trim(getLdapUsername.ldap_username)#" cfsqltype="cf_sql_varchar">
+            </cfif>
+          )
+    </cfquery>
 
+    <cfset relayAdminCleanupUsers = "">
+    <cfset relayAdminSessionTargets = "">
+
+    <cfloop query="getRelayManagedSystemUsers">
+        <cfif Len(Trim(username)) GT 0 AND NOT ListFindNoCase(relayAdminCleanupUsers, username)>
+            <cfset relayAdminCleanupUsers = ListAppend(relayAdminCleanupUsers, Trim(username))>
+        </cfif>
+        <cfif Len(Trim(username)) GT 0 AND NOT ListFindNoCase(relayAdminSessionTargets, username)>
+            <cfset relayAdminSessionTargets = ListAppend(relayAdminSessionTargets, Trim(username))>
+        </cfif>
+        <cfif Len(Trim(email)) GT 0 AND NOT ListFindNoCase(relayAdminSessionTargets, email)>
+            <cfset relayAdminSessionTargets = ListAppend(relayAdminSessionTargets, Trim(email))>
+        </cfif>
+    </cfloop>
+
+    <cfif getLdapUsername.recordcount GTE 1 AND Len(Trim(getLdapUsername.ldap_username)) GT 0>
+        <cfif NOT ListFindNoCase(relayAdminCleanupUsers, Trim(getLdapUsername.ldap_username))>
+            <cfset relayAdminCleanupUsers = ListAppend(relayAdminCleanupUsers, Trim(getLdapUsername.ldap_username))>
+        </cfif>
+        <cfif NOT ListFindNoCase(relayAdminSessionTargets, Trim(getLdapUsername.ldap_username))>
+            <cfset relayAdminSessionTargets = ListAppend(relayAdminSessionTargets, Trim(getLdapUsername.ldap_username))>
+        </cfif>
+    <cfelseif Len(Trim(recipient)) GT 0 AND NOT ListFindNoCase(relayAdminCleanupUsers, recipient)>
+        <cfset relayAdminCleanupUsers = ListAppend(relayAdminCleanupUsers, Trim(recipient))>
+    </cfif>
+
+    <cfif Len(Trim(recipient)) GT 0 AND NOT ListFindNoCase(relayAdminSessionTargets, recipient)>
+        <cfset relayAdminSessionTargets = ListAppend(relayAdminSessionTargets, Trim(recipient))>
+    </cfif>
+
+    <cfloop list="#relayAdminCleanupUsers#" index="cleanupUsername">
+        <cfset ldapUsername = cleanupUsername>
+        <cfset adminGroupAction = "remove">
+        <cfinclude template="ldap_toggle_admin_group.cfm">
+    </cfloop>
+
+    <cfloop list="#relayAdminCleanupUsers#" index="cleanupUsername">
+        <cfset ldapUsername = cleanupUsername>
         <!--- DELETE AUTHELIA TOTP + WEBAUTHN DEVICES.
              Without this, recipient delete leaves orphaned rows in
              authelia.totp_configurations / authelia.webauthn_devices.
@@ -164,6 +212,17 @@
             <cfset ldapDeleteError = cfcatch.message>
         </cfcatch>
         </cftry>
+    </cfloop>
+
+    <cfloop list="#relayAdminSessionTargets#" index="targetSessionUser">
+        <cfinclude template="invalidate_user_sessions.cfm">
+    </cfloop>
+
+    <cfif getRelayManagedSystemUsers.recordcount GTE 1>
+        <cfquery datasource="hermes">
+            DELETE FROM system_users
+            WHERE id IN (<cfqueryparam value="#ValueList(getRelayManagedSystemUsers.id)#" cfsqltype="cf_sql_integer" list="true">)
+        </cfquery>
     </cfif>
 
     <!--- Cancel any pending password reset requests for this user --->
@@ -418,4 +477,3 @@
     <cfquery name="deletecerts" datasource="hermes">
     delete from recipient_certificates where user_id='#delete_id#'
     </cfquery>
-

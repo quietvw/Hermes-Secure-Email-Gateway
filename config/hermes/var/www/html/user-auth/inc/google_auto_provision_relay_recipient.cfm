@@ -38,6 +38,9 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 <cfset googleProvisionMessage = "Unable to create your account. Please contact your system administrator.">
 <cfset googleProvisionExistingAuthType = "">
 <cfset googleProvisionExistingRemoteAuthDomain = "">
+<cfset googleProvisionExistingEnforceMfa = googleProvisionEnforceMfa>
+<cfset googleProvisionExistingSystemAdmin = false>
+<cfset googleProvisionPortalPath = "/users/">
 
 <cfset recipientEmail = LCase(Trim(googleProvisionRecipientEmail))>
 <cfset recipientName = Len(Trim(googleProvisionRecipientName)) GT 0 ? Trim(googleProvisionRecipientName) : recipientEmail>
@@ -62,17 +65,19 @@ This file is part of Hermes Secure Email Gateway Community Edition.
     <cfelse>
         <cflock timeout="15" throwontimeout="true" type="exclusive" name="google_provision_recipient_#Hash(recipientEmail)#">
             <cfquery name="checkentry" datasource="hermes">
-                SELECT id, auth_type, remoteauth_domain
+                SELECT id, auth_type, remoteauth_domain, enforce_mfa
                 FROM recipients
                 WHERE recipient = <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">
                 LIMIT 1
             </cfquery>
 
             <cfif checkentry.recordcount GTE 1>
+                <cfset googleProvisionRecipientId = checkentry.id>
                 <cfset googleProvisionStatus = "exists">
                 <cfset googleProvisionMessage = "An account already exists for this email address.">
                 <cfset googleProvisionExistingAuthType = checkentry.auth_type>
                 <cfset googleProvisionExistingRemoteAuthDomain = checkentry.remoteauth_domain>
+                <cfset googleProvisionExistingEnforceMfa = checkentry.enforce_mfa>
             <cfelse>
                 <cfquery datasource="hermes">
                     INSERT INTO recipients
@@ -110,7 +115,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             </cfif>
         </cflock>
 
-        <cfif recipientCreated>
+        <cfif recipientCreated OR googleProvisionStatus EQ "exists">
             <cftry>
             <cfquery name="checkUserSettings" datasource="hermes">
                 SELECT email
@@ -119,7 +124,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 LIMIT 1
             </cfquery>
 
-            <cfif checkUserSettings.recordcount GTE 1>
+            <cfif recipientCreated AND checkUserSettings.recordcount GTE 1>
                 <cfquery datasource="hermes">
                     UPDATE user_settings
                     SET report_enabled = <cfqueryparam value="#googleProvisionReports#" cfsqltype="cf_sql_varchar">,
@@ -127,7 +132,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                         download_msg = <cfqueryparam value="#googleProvisionDownloadMsg#" cfsqltype="cf_sql_tinyint">
                     WHERE email = <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">
                 </cfquery>
-            <cfelse>
+            <cfelseif checkUserSettings.recordcount LT 1>
                 <cfquery datasource="hermes">
                     INSERT INTO user_settings
                     (email, report_enabled, train_bayes, download_msg)
@@ -142,76 +147,84 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 <cfset userSettingsCreated = true>
             </cfif>
 
-            <cfset show_pdf_enabled = googleProvisionPdfEnabled>
-            <cfset show_smime_enabled = googleProvisionSmimeEnabled>
-            <cfset show_pgp_enabled = googleProvisionPgpEnabled>
-            <cfset show_sign = googleProvisionSign>
+            <cfif recipientCreated>
+                <cfset show_pdf_enabled = googleProvisionPdfEnabled>
+                <cfset show_smime_enabled = googleProvisionSmimeEnabled>
+                <cfset show_pgp_enabled = googleProvisionPgpEnabled>
+                <cfset show_sign = googleProvisionSign>
 
-            <cfif show_pdf_enabled EQ "1" OR show_smime_enabled EQ "1" OR show_pgp_enabled EQ "1">
-                <cfthread action="run" name="googleProvisionDjigzo_#Hash(recipientEmail & CreateUUID())#" recipientEmail="#recipientEmail#">
-                    <cfset recipient = attributes.recipientEmail>
-                    <cfset djigzonotadded = 0>
-                    <cfset djigzonotaddedrecipient = "">
-                    <cfinclude template="/admin/2/inc/add_internal_recipients_djigzo.cfm">
-                </cfthread>
-            </cfif>
+                <cfif show_pdf_enabled EQ "1" OR show_smime_enabled EQ "1" OR show_pgp_enabled EQ "1">
+                    <cfthread action="run" name="googleProvisionDjigzo_#Hash(recipientEmail & CreateUUID())#" recipientEmail="#recipientEmail#">
+                        <cfset recipient = attributes.recipientEmail>
+                        <cfset djigzonotadded = 0>
+                        <cfset djigzonotaddedrecipient = "">
+                        <cfinclude template="/admin/2/inc/add_internal_recipients_djigzo.cfm">
+                    </cfthread>
+                </cfif>
 
-            <cfif googleProvisionRecipientId GT 0 AND show_smime_enabled EQ "1" AND IsValid("integer", googleProvisionCa)>
-                <cfquery name="existingSmimeCert" datasource="hermes">
-                    SELECT id
-                    FROM recipient_certificates
-                    WHERE user_id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
-                    LIMIT 1
-                </cfquery>
-                <cfif existingSmimeCert.recordcount LT 1>
-                    <cfinclude template="/admin/2/inc/generate_random_password.cfm">
-                    <cfquery datasource="hermes">
-                        INSERT INTO cert_generation_queue
-                        (recipient_id, recipient_email, job_type, ca_id, validity, encryption, algorithm, password)
-                        VALUES
-                        (
-                            <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">,
-                            <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">,
-                            'smime',
-                            <cfqueryparam value="#googleProvisionCa#" cfsqltype="cf_sql_integer">,
-                            <cfqueryparam value="#googleProvisionValidity#" cfsqltype="cf_sql_integer">,
-                            <cfqueryparam value="#googleProvisionCertEncryption#" cfsqltype="cf_sql_integer">,
-                            <cfqueryparam value="#googleProvisionCertAlgorithm#" cfsqltype="cf_sql_varchar">,
-                            <cfqueryparam value="#generatedPassword#" cfsqltype="cf_sql_varchar">
-                        )
+                <cfif googleProvisionRecipientId GT 0 AND show_smime_enabled EQ "1" AND IsValid("integer", googleProvisionCa)>
+                    <cfquery name="existingSmimeCert" datasource="hermes">
+                        SELECT id
+                        FROM recipient_certificates
+                        WHERE user_id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
+                        LIMIT 1
                     </cfquery>
+                    <cfif existingSmimeCert.recordcount LT 1>
+                        <cfinclude template="/admin/2/inc/generate_random_password.cfm">
+                        <cfquery datasource="hermes">
+                            INSERT INTO cert_generation_queue
+                            (recipient_id, recipient_email, job_type, ca_id, validity, encryption, algorithm, password)
+                            VALUES
+                            (
+                                <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">,
+                                <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">,
+                                'smime',
+                                <cfqueryparam value="#googleProvisionCa#" cfsqltype="cf_sql_integer">,
+                                <cfqueryparam value="#googleProvisionValidity#" cfsqltype="cf_sql_integer">,
+                                <cfqueryparam value="#googleProvisionCertEncryption#" cfsqltype="cf_sql_integer">,
+                                <cfqueryparam value="#googleProvisionCertAlgorithm#" cfsqltype="cf_sql_varchar">,
+                                <cfqueryparam value="#generatedPassword#" cfsqltype="cf_sql_varchar">
+                            )
+                        </cfquery>
+                    </cfif>
+                </cfif>
+
+                <cfif googleProvisionRecipientId GT 0 AND show_pgp_enabled EQ "1">
+                    <cfquery name="existingPgpKeyring" datasource="hermes">
+                        SELECT id
+                        FROM recipient_keystores
+                        WHERE user_id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
+                        AND master = '1'
+                        LIMIT 1
+                    </cfquery>
+                    <cfif existingPgpKeyring.recordcount LT 1>
+                        <cfinclude template="/admin/2/inc/generate_random_password.cfm">
+                        <cfset pgpNameReal = ListFirst(recipientEmail, "@")>
+                        <cfquery datasource="hermes">
+                            INSERT INTO cert_generation_queue
+                            (recipient_id, recipient_email, job_type, pgp_key_length, pgp_name_real, password)
+                            VALUES
+                            (
+                                <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">,
+                                <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">,
+                                'pgp',
+                                <cfqueryparam value="#googleProvisionPgpEncryption#" cfsqltype="cf_sql_integer">,
+                                <cfqueryparam value="#pgpNameReal#" cfsqltype="cf_sql_varchar">,
+                                <cfqueryparam value="#generatedPassword#" cfsqltype="cf_sql_varchar">
+                            )
+                        </cfquery>
+                    </cfif>
                 </cfif>
             </cfif>
 
-            <cfif googleProvisionRecipientId GT 0 AND show_pgp_enabled EQ "1">
-                <cfquery name="existingPgpKeyring" datasource="hermes">
-                    SELECT id
-                    FROM recipient_keystores
-                    WHERE user_id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
-                    AND master = '1'
-                    LIMIT 1
-                </cfquery>
-                <cfif existingPgpKeyring.recordcount LT 1>
-                    <cfinclude template="/admin/2/inc/generate_random_password.cfm">
-                    <cfset pgpNameReal = ListFirst(recipientEmail, "@")>
-                    <cfquery datasource="hermes">
-                        INSERT INTO cert_generation_queue
-                        (recipient_id, recipient_email, job_type, pgp_key_length, pgp_name_real, password)
-                        VALUES
-                        (
-                            <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">,
-                            <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">,
-                            'pgp',
-                            <cfqueryparam value="#googleProvisionPgpEncryption#" cfsqltype="cf_sql_integer">,
-                            <cfqueryparam value="#pgpNameReal#" cfsqltype="cf_sql_varchar">,
-                            <cfqueryparam value="#generatedPassword#" cfsqltype="cf_sql_varchar">
-                        )
-                    </cfquery>
-                </cfif>
-            </cfif>
-
+            <cfset ldapAccessControl = googleProvisionExistingEnforceMfa EQ 1 ? "two_factor" : "one_factor">
             <cfset ldapAddError = "">
-            <cfinclude template="/admin/2/inc/ldap_add_user_relay.cfm">
+            <cfif googleProvisionExistingAuthType EQ "remote" AND Len(Trim(googleProvisionExistingRemoteAuthDomain)) GT 0>
+                <cfset remoteauthDomain = googleProvisionExistingRemoteAuthDomain>
+                <cfinclude template="/admin/2/inc/ldap_add_user_relay_remoteauth.cfm">
+            <cfelse>
+                <cfinclude template="/admin/2/inc/ldap_add_user_relay.cfm">
+            </cfif>
             <cfset ldapProvisionSucceeded = (IsDefined("ldapUserCreated") AND ldapUserCreated)>
             <cfif ldapProvisionSucceeded AND Len(Trim(ldapAddError)) GT 0 AND NOT FindNoCase("Already exists", ldapAddError)>
                 <cfset ldapProvisionSucceeded = false>
@@ -221,20 +234,42 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 <cfthrow message="Unable to provision LDAP user.">
             </cfif>
 
-            <cfset welcomeEmailSent = true>
-            <cftry>
-                <cfinclude template="/admin/2/inc/send_recipient_welcome_email.cfm">
-                <cfcatch type="any">
-                    <cfset welcomeEmailSent = false>
-                </cfcatch>
-            </cftry>
+            <cfquery name="getRelayManagedAdmin" datasource="hermes">
+                SELECT username
+                FROM system_users
+                WHERE system = '3'
+                  AND applied = '1'
+                  AND email = <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">
+                LIMIT 1
+            </cfquery>
 
-            <cfif welcomeEmailSent>
-                <cfset googleProvisionStatus = "created">
-                <cfset googleProvisionMessage = "Your account has been created and a welcome email has been sent.">
+            <cfif getRelayManagedAdmin.recordcount GTE 1 AND Len(Trim(ldapUsername)) GT 0>
+                <cfset googleProvisionExistingSystemAdmin = true>
+                <cfset googleProvisionPortalPath = "/admin/">
+                <cfset adminGroupAction = "add">
+                <cfinclude template="/admin/2/inc/ldap_toggle_admin_group.cfm">
+            </cfif>
+
+            <cfif recipientCreated>
+                <cfset welcomeEmailSent = true>
+                <cftry>
+                    <cfinclude template="/admin/2/inc/send_recipient_welcome_email.cfm">
+                    <cfcatch type="any">
+                        <cfset welcomeEmailSent = false>
+                    </cfcatch>
+                </cftry>
+
+                <cfif welcomeEmailSent>
+                    <cfset googleProvisionStatus = "created">
+                    <cfset googleProvisionMessage = "Your account has been created and a welcome email has been sent.">
+                <cfelse>
+                    <cfset googleProvisionStatus = "created_email_failed">
+                    <cfset googleProvisionMessage = "Your account has been created, but we were unable to send the welcome email. Please contact your system administrator for password setup instructions.">
+                </cfif>
+            <cfelseif googleProvisionExistingSystemAdmin>
+                <cfset googleProvisionMessage = "Your Hermes SEG account is ready. Redirecting you to the Admin Console.">
             <cfelse>
-                <cfset googleProvisionStatus = "created_email_failed">
-                <cfset googleProvisionMessage = "Your account has been created, but we were unable to send the welcome email. Please contact your system administrator for password setup instructions.">
+                <cfset googleProvisionMessage = "Your Hermes SEG account is ready. Redirecting you to the User Console.">
             </cfif>
             <cfcatch type="any">
                 <cftry>
