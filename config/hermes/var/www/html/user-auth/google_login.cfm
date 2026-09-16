@@ -219,6 +219,7 @@ function normalizeGoogleDomains(rawValue) {
                                         FROM recipients
                                         WHERE recipient = <cfqueryparam value="#flowEmail#" cfsqltype="cf_sql_varchar">
                                           AND status = 'OK'
+                                          AND (recipient_type IS NULL OR recipient_type IN ('relay', 'mailbox'))
                                     ) AS has_user_access
                             </cfquery>
                             <cfif getGoogleRedirectAccess.has_admin_access EQ 0 AND getGoogleRedirectAccess.has_user_access EQ 0>

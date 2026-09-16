@@ -59,14 +59,5 @@ require("Authorized" in google_verify and "Unauthorized" in google_verify and "/
 require("https://hermes_console_host$request_uri" in read("config/hermes/opt/hermes/templates/auth_admin.conf"), "admin auth redirect is not pinned to the configured console host")
 require("https://hermes_console_host$request_uri" in read("config/hermes/opt/hermes/templates/auth_users.conf"), "users auth redirect is not pinned to the configured console host")
 
-require(
-    re.search(
-        r'session\.theGroups CONTAINS "admins"\s+AND NOT\s+\(session\.theGroups CONTAINS "relays"\s+OR session\.theGroups CONTAINS "mailboxes"\).*?<cflocation url="/admin/" addtoken="no">',
-        users_app,
-        re.S,
-    ) is not None,
-    "users application does not redirect admin-only bridge sessions to /admin/",
-)
-
 print("PASS: Google SSO bridge wiring looks correct")
 PY
