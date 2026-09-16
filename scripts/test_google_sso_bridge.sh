@@ -36,6 +36,14 @@ grep -q "googleSsoIssueSession(flowEmail, flowName)" \
   "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
   || fail "google login does not issue bridge sessions"
 
+grep -q "AND status = 'OK'" \
+  "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
+  || fail "google login does not guard redirects with active recipient status"
+
+grep -q "googleProvisionStatus = \"disabled\"" \
+  "$ROOT/config/hermes/var/www/html/user-auth/inc/google_auto_provision_relay_recipient.cfm" \
+  || fail "google auto-provisioning does not block disabled recipients"
+
 grep -q "<cflocation url=\"/admin/\" addtoken=\"no\">" \
   "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
   || fail "google login does not route admins to /admin/"

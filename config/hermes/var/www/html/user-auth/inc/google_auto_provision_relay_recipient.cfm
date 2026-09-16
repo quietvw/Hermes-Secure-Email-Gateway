@@ -63,18 +63,23 @@ This file is part of Hermes Secure Email Gateway Community Edition.
     <cfelse>
         <cflock timeout="15" throwontimeout="true" type="exclusive" name="google_provision_recipient_#Hash(recipientEmail)#">
             <cfquery name="checkentry" datasource="hermes">
-                SELECT id, auth_type, remoteauth_domain
+                SELECT id, auth_type, remoteauth_domain, status
                 FROM recipients
                 WHERE recipient = <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">
                 LIMIT 1
             </cfquery>
 
             <cfif checkentry.recordcount GTE 1>
-                <cfset googleProvisionStatus = "exists">
-                <cfset googleProvisionMessage = "An account already exists for this email address.">
                 <cfset googleProvisionExistingAuthType = checkentry.auth_type>
                 <cfset googleProvisionExistingRemoteAuthDomain = checkentry.remoteauth_domain>
                 <cfset googleProvisionRecipientId = checkentry.id>
+                <cfif checkentry.status EQ "OK">
+                    <cfset googleProvisionStatus = "exists">
+                    <cfset googleProvisionMessage = "An account already exists for this email address.">
+                <cfelse>
+                    <cfset googleProvisionStatus = "disabled">
+                    <cfset googleProvisionMessage = "Your account is disabled or is not allowed to access this portal. Please contact your system administrator.">
+                </cfif>
             <cfelse>
                 <cfquery datasource="hermes">
                     INSERT INTO recipients
@@ -239,6 +244,9 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             <cftry>
                 <cfinclude template="/admin/2/inc/ldap_add_user_relay.cfm">
                 <cfset googleProvisionLdapProvisioned = (IsDefined("ldapUserCreated") AND ldapUserCreated)>
+                <cfif NOT googleProvisionLdapProvisioned AND Len(Trim(ldapAddError)) GT 0 AND FindNoCase("Already exists", ldapAddError)>
+                    <cfset googleProvisionLdapProvisioned = true>
+                </cfif>
                 <cfif googleProvisionLdapProvisioned AND Len(Trim(ldapAddError)) GT 0 AND NOT FindNoCase("Already exists", ldapAddError)>
                     <cfset googleProvisionLdapProvisioned = false>
                 </cfif>

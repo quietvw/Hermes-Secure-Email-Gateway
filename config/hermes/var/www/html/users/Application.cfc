@@ -86,10 +86,11 @@ the url: https://#ConsoleHost#</cfoutput>
     --->
 
 
-         <cfexecute name="/usr/bin/curl"
-         arguments="-X 'GET' -k 'https://#ConsoleHost#/user-auth/google_sso_verify.cfm?target=users' -H 'accept: */*' -H 'Cookie: #theCookie#'"
-         variable="curlresult"
-         timeout="10" />
+         <cfhttp url="https://#ConsoleHost#/user-auth/google_sso_verify.cfm?target=users" method="GET" result="verifyResult" timeout="10" throwOnError="no">
+         <cfhttpparam type="header" name="accept" value="*/*">
+         <cfhttpparam type="header" name="Cookie" value="#theCookie#">
+         </cfhttp>
+         <cfset curlresult = Trim(verifyResult.fileContent)>
 
        <cfif #curlresult# is "Unauthorized">
 

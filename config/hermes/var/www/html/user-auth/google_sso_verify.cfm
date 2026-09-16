@@ -32,11 +32,12 @@
 </cfif>
 
 <cftry>
-    <cfexecute name="/usr/bin/curl"
-        arguments="-X 'GET' -k 'https://#getConsoleHost.value2#/api/verify' -H 'accept: */*' -H 'X-Original-URL: https://#getConsoleHost.value2##authTargetPath#' -H 'Cookie: #requestCookies#'"
-        variable="curlresult"
-        timeout="10" />
-    <cfoutput>#Trim(curlresult)#</cfoutput>
+    <cfhttp url="https://#getConsoleHost.value2#/api/verify" method="GET" result="verifyResult" timeout="10" throwOnError="no">
+        <cfhttpparam type="header" name="accept" value="*/*">
+        <cfhttpparam type="header" name="X-Original-URL" value="https://#getConsoleHost.value2##authTargetPath#">
+        <cfhttpparam type="header" name="Cookie" value="#requestCookies#">
+    </cfhttp>
+    <cfoutput>#Trim(verifyResult.fileContent)#</cfoutput>
     <cfcatch type="any">
         <cfoutput>Unauthorized</cfoutput>
     </cfcatch>

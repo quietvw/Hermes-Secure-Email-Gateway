@@ -37,6 +37,10 @@ function googleSsoSanitizeHeaderValue(rawValue) {
     return Trim(cleanValue);
 }
 
+function googleSsoSignValue(rawValue) {
+    return LCase(HMAC(arguments.rawValue, googleSsoReadKey(), "HmacSHA256", "UTF-8"));
+}
+
 function googleSsoReadKey() {
     if (NOT StructKeyExists(request, "googleSsoKey")) {
         request.googleSsoKey = Trim(FileRead("/opt/hermes/keys/hermes.key", "utf-8"));
@@ -83,8 +87,25 @@ function googleSsoReadSession() {
     }
 
     try {
-        var decryptedPayload = Decrypt(rawCookieValue, googleSsoReadKey(), "AES", "Hex");
-        var payload = DeserializeJSON(decryptedPayload);
+        var separatorPosition = Find(":", rawCookieValue);
+        var cookieSignature = "";
+        var encryptedPayload = "";
+        var decryptedPayload = "";
+        var payload = "";
+
+        if (separatorPosition LTE 1) {
+            return result;
+        }
+
+        cookieSignature = LCase(Left(rawCookieValue, separatorPosition - 1));
+        encryptedPayload = Mid(rawCookieValue, separatorPosition + 1, Len(rawCookieValue) - separatorPosition);
+
+        if (cookieSignature NEQ googleSsoSignValue(encryptedPayload)) {
+            return result;
+        }
+
+        decryptedPayload = Decrypt(encryptedPayload, googleSsoReadKey(), "AES", "Hex");
+        payload = DeserializeJSON(decryptedPayload);
 
         if (NOT StructKeyExists(payload, "email") OR NOT IsValid("email", payload.email)) {
             return result;
@@ -113,10 +134,11 @@ function googleSsoIssueSession(required string email, string name = "", numeric 
         expires_at: googleSsoCurrentEpoch() + Int(arguments.ttlSeconds)
     };
     var encryptedPayload = Encrypt(SerializeJSON(payload), googleSsoReadKey(), "AES", "Hex");
+    var signedPayload = googleSsoSignValue(encryptedPayload) & ":" & encryptedPayload;
 
     cfcookie(
         name = googleSsoCookieName(),
-        value = encryptedPayload,
+        value = signedPayload,
         httponly = true,
         secure = true,
         path = "/",
@@ -160,9 +182,11 @@ function googleSsoBuildAuthContext(required string target) {
 
     recipientQuery = queryExecute(
         "SELECT r.recipient, COALESCE(r.recipient_type, 'relay') AS recipient_type, COALESCE(us.ldap_username, '') AS ldap_username
+               , r.status
          FROM recipients r
          LEFT JOIN user_settings us ON us.email = r.recipient
          WHERE r.recipient = :email
+          AND r.status = 'OK'
          LIMIT 1",
         { email = { value = sessionData.email, cfsqltype = "cf_sql_varchar" } },
         { datasource = "hermes" }

@@ -213,13 +213,24 @@ function normalizeGoogleDomains(rawValue) {
                                         FROM system_users
                                         WHERE email = <cfqueryparam value="#flowEmail#" cfsqltype="cf_sql_varchar">
                                           AND applied = '1'
-                                    ) AS has_admin_access
+                                    ) AS has_admin_access,
+                                    EXISTS(
+                                        SELECT 1
+                                        FROM recipients
+                                        WHERE recipient = <cfqueryparam value="#flowEmail#" cfsqltype="cf_sql_varchar">
+                                          AND status = 'OK'
+                                    ) AS has_user_access
                             </cfquery>
+                            <cfif getGoogleRedirectAccess.has_admin_access EQ 0 AND getGoogleRedirectAccess.has_user_access EQ 0>
+                                <cfset flowTitle = "Organization Login Failed">
+                                <cfset flowMessage = "Your account is disabled or is not allowed to access this portal. Please contact your system administrator.">
+                            <cfelse>
                             <cfset googleSsoIssueSession(flowEmail, flowName)>
                             <cfif getGoogleRedirectAccess.has_admin_access EQ 1>
                                 <cflocation url="/admin/" addtoken="no">
                             <cfelse>
                                 <cflocation url="/users/" addtoken="no">
+                            </cfif>
                             </cfif>
                         <cfelse>
                             <cfset flowTitle = "Organization Login Failed">
