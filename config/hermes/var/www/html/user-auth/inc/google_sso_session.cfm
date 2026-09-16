@@ -153,8 +153,7 @@ function googleSsoIssueSession(required string email, string name = "", numeric 
         value = signedPayload,
         httponly = true,
         secure = true,
-        path = "/",
-        samesite = "Lax"
+        path = "/"
     );
 }
 
@@ -165,8 +164,7 @@ function googleSsoClearSession() {
         expires = "now",
         httponly = true,
         secure = true,
-        path = "/",
-        samesite = "Lax"
+        path = "/"
     );
 }
 
