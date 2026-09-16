@@ -42,7 +42,8 @@ function googleSsoSignValue(rawValue) {
 }
 
 function googleSsoGenerateIvHex() {
-    return LCase(Left(Hash(GenerateSecretKey("AES") & CreateUUID() & Now(), "SHA-256"), 32));
+    var secureRandom = CreateObject("java", "java.security.SecureRandom");
+    return LCase(BinaryEncode(secureRandom.generateSeed(16), "Hex"));
 }
 
 function googleSsoReadKey() {
@@ -241,7 +242,7 @@ function googleSsoBuildAuthContext(required string target) {
     if (result.target EQ "admin") {
         result.authorized = ArrayFindNoCase(authGroups, "admins") GT 0;
     } else if (result.target EQ "users") {
-        result.authorized = ArrayFindNoCase(authGroups, "relays") GT 0 OR ArrayFindNoCase(authGroups, "mailboxes") GT 0 OR ArrayFindNoCase(authGroups, "admins") GT 0;
+        result.authorized = ArrayFindNoCase(authGroups, "relays") GT 0 OR ArrayFindNoCase(authGroups, "mailboxes") GT 0;
     }
 
     if (Len(Trim(result.username)) EQ 0) {
