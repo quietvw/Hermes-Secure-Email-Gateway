@@ -5,6 +5,23 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 --->
 
 <cfscript>
+function googleSsoEnabled() {
+    if (NOT StructKeyExists(request, "googleSsoEnabled")) {
+        var enabledQuery = queryExecute(
+            "SELECT value2
+             FROM parameters2
+             WHERE module = 'google_provisioning'
+               AND parameter = 'enabled'
+             LIMIT 1",
+            {},
+            { datasource = "hermes" }
+        );
+        request.googleSsoEnabled = enabledQuery.recordCount GTE 1 AND Trim(enabledQuery.value2) EQ "1";
+    }
+
+    return request.googleSsoEnabled;
+}
+
 function googleSsoCookieName() {
     return "hermes_google_sso";
 }
@@ -137,7 +154,7 @@ function googleSsoBuildAuthContext(required string target) {
     var accessGroup = "one_factor";
     var recipientGroup = "";
 
-    if (NOT sessionData.valid) {
+    if (NOT googleSsoEnabled() OR NOT sessionData.valid) {
         return result;
     }
 

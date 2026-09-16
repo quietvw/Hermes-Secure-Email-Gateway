@@ -25,6 +25,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hermes SEG | Organization Login</title>
   <cfinclude template="./inc/html_head.cfm" />
+  <cfinclude template="./inc/google_sso_session.cfm" />
 </head>
 
 <cfset googleSettings = {
@@ -124,6 +125,7 @@ function normalizeGoogleDomains(rawValue) {
 <cfset flowTitle = "Organization Login Unavailable">
 <cfset flowMessage = "Please contact your system administrator.">
 <cfset flowEmail = "">
+<cfset flowName = "">
 
 <cfif StructKeyExists(url, "error") AND Len(Trim(url.error)) GT 0>
     <cfset flowTitle = "Organization Login Failed">
@@ -203,21 +205,21 @@ function normalizeGoogleDomains(rawValue) {
                         <cfset googleProvisionPgpEncryption = googleSettings.pgp_encryption>
                         <cfinclude template="./inc/google_auto_provision_relay_recipient.cfm">
 
-                        <cfif googleProvisionStatus EQ "created">
-                            <cfset flowStatus = "success">
-                            <cfset flowTitle = "Organization Account Verified">
-                            <cfset flowMessage = "A new Hermes SEG account has been created for #HTMLEditFormat(flowEmail)#. Please check your email for the welcome message, then use Reset password? to finish setup.">
-                        <cfelseif googleProvisionStatus EQ "created_email_failed">
-                            <cfset flowStatus = "success">
-                            <cfset flowTitle = "Organization Account Verified">
-                            <cfset flowMessage = googleProvisionMessage>
-                        <cfelseif googleProvisionStatus EQ "exists">
-                            <cfset flowStatus = "success">
-                            <cfset flowTitle = "Account Already Available">
-                            <cfif IsDefined("googleProvisionExistingAuthType") AND googleProvisionExistingAuthType EQ "remote">
-                                <cfset flowMessage = "A Hermes SEG account already exists for #HTMLEditFormat(flowEmail)#. Use your organization credentials to sign in. Contact your system administrator if you need help accessing the account.">
+                        <cfif ListFindNoCase("created,created_email_failed,exists", googleProvisionStatus)>
+                            <cfquery name="getGoogleRedirectAccess" datasource="hermes">
+                                SELECT
+                                    EXISTS(
+                                        SELECT 1
+                                        FROM system_users
+                                        WHERE email = <cfqueryparam value="#flowEmail#" cfsqltype="cf_sql_varchar">
+                                          AND applied = '1'
+                                    ) AS has_admin_access
+                            </cfquery>
+                            <cfset googleSsoIssueSession(flowEmail, flowName)>
+                            <cfif getGoogleRedirectAccess.has_admin_access EQ 1>
+                                <cflocation url="/admin/" addtoken="no">
                             <cfelse>
-                                <cfset flowMessage = "A Hermes SEG account already exists for #HTMLEditFormat(flowEmail)#. Open the User Console and use Reset password? if you need to set or change your password.">
+                                <cflocation url="/users/" addtoken="no">
                             </cfif>
                         <cfelse>
                             <cfset flowTitle = "Organization Login Failed">

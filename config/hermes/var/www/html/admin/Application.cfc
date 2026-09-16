@@ -214,7 +214,7 @@ the url: https://#ConsoleHost#</cfoutput>
 
        
          <cfexecute name="/usr/bin/curl"
-         arguments="-X 'GET' -k 'https://#ConsoleHost#/api/verify' -H 'accept: */*' -H 'X-Original-URL: https://#ConsoleHost#/admin/' -H 'Cookie: #theCookie#'"
+         arguments="-X 'GET' -k 'https://#ConsoleHost#/user-auth/google_sso_verify.cfm?target=admin' -H 'accept: */*' -H 'Cookie: #theCookie#'"
          variable="curlresult"
          timeout="10" />
 

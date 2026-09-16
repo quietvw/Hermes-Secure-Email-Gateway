@@ -87,7 +87,7 @@ the url: https://#ConsoleHost#</cfoutput>
 
 
          <cfexecute name="/usr/bin/curl"
-         arguments="-X 'GET' -k 'https://#ConsoleHost#/api/verify' -H 'accept: */*' -H 'X-Original-URL: https://#ConsoleHost#/users/' -H 'Cookie: #theCookie#'"
+         arguments="-X 'GET' -k 'https://#ConsoleHost#/user-auth/google_sso_verify.cfm?target=users' -H 'accept: */*' -H 'Cookie: #theCookie#'"
          variable="curlresult"
          timeout="10" />
 
@@ -140,7 +140,9 @@ the url: https://#ConsoleHost#</cfoutput>
   <cfquery name="getauthtype" datasource="hermes">
   select auth_type from recipients where recipient = <cfqueryparam value="#session.email#" cfsqltype="cf_sql_varchar">
   </cfquery>
-  <cfif getauthtype.recordcount GTE 1>
+  <cfif IsStruct( reqData ) AND StructKeyExists( reqData, "Headers" ) AND IsStruct( reqData.Headers ) AND StructKeyExists( reqData.Headers , "x-hermes-auth-source" ) AND reqData.Headers["x-hermes-auth-source"] EQ "google_sso">
+    <cfset session.auth_type = "remote">
+  <cfelseif getauthtype.recordcount GTE 1>
     <cfset session.auth_type = getauthtype.auth_type>
   <cfelse>
     <cfset session.auth_type = "">
@@ -184,4 +186,3 @@ the url: https://#ConsoleHost#</cfoutput>
 
        </cffunction>
 </cfcomponent>
-

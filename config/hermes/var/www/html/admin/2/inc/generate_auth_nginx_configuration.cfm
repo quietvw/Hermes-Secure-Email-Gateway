@@ -28,25 +28,50 @@ select value2 from parameters2 where module = 'console' and parameter = 'console
 
 <cfset consoleHost = "#getconsolehost.value2#">
     
-    <!--- GENERATE NGINX AUTH.CONF STARTS HERE --->
+    <!--- GENERATE NGINX AUTH SNIPPETS START HERE --->
 
     <cffile action="read" file="/opt/hermes/templates/auth.conf" variable="nginx">
-  
-               
     <cffile action = "write"
     file = "/opt/hermes/tmp/#customtrans3#_auth.conf"
     output = "#REReplace("#nginx#","hermes_console_host","#trim(consoleHost)#","ALL")#" addnewline="no">
-      
-    
-    <!--- Backup Nginx auth.conf --->
-    <cffile action = "copy" source = "/etc/nginx/snippets/auth.conf" 
-    destination = "/etc/nginx/snippets/auth.HERMES">
-    
-    <!--- Move #customtrans3#_auth.conf to /etc/nginx/snippets/auth.conf --->
-    <cffile action = "move" source = "/opt/hermes/tmp/#customtrans3#_auth.conf" 
-    destination = "/etc/nginx/snippets/auth.conf">
 
-    <!--- GENERATE NGINX AUTH.CONF ENDS HERE --->
+    <cffile action="read" file="/opt/hermes/templates/auth_admin.conf" variable="adminNginx">
+    <cffile action = "write"
+    file = "/opt/hermes/tmp/#customtrans3#_auth_admin.conf"
+    output = "#REReplace("#adminNginx#","hermes_console_host","#trim(consoleHost)#","ALL")#" addnewline="no">
+
+    <cffile action="read" file="/opt/hermes/templates/auth_users.conf" variable="usersNginx">
+    <cffile action = "write"
+    file = "/opt/hermes/tmp/#customtrans3#_auth_users.conf"
+    output = "#REReplace("#usersNginx#","hermes_console_host","#trim(consoleHost)#","ALL")#" addnewline="no">
+
+    <!--- Backup Nginx auth snippets --->
+    <cffile action = "copy" source = "/etc/nginx/snippets/auth.conf"
+    destination = "/etc/nginx/snippets/auth.HERMES">
+    <cfif FileExists("/etc/nginx/snippets/auth_admin.conf")>
+    <cffile action = "copy" source = "/etc/nginx/snippets/auth_admin.conf"
+    destination = "/etc/nginx/snippets/auth_admin.HERMES">
+    </cfif>
+    <cfif FileExists("/etc/nginx/snippets/auth_users.conf")>
+    <cffile action = "copy" source = "/etc/nginx/snippets/auth_users.conf"
+    destination = "/etc/nginx/snippets/auth_users.HERMES">
+    </cfif>
+
+    <!--- Replace active Nginx auth snippets --->
+    <cffile action = "move" source = "/opt/hermes/tmp/#customtrans3#_auth.conf"
+    destination = "/etc/nginx/snippets/auth.conf">
+    <cfif FileExists("/etc/nginx/snippets/auth_admin.conf")>
+    <cffile action="delete" file="/etc/nginx/snippets/auth_admin.conf">
+    </cfif>
+    <cffile action = "move" source = "/opt/hermes/tmp/#customtrans3#_auth_admin.conf"
+    destination = "/etc/nginx/snippets/auth_admin.conf">
+    <cfif FileExists("/etc/nginx/snippets/auth_users.conf")>
+    <cffile action="delete" file="/etc/nginx/snippets/auth_users.conf">
+    </cfif>
+    <cffile action = "move" source = "/opt/hermes/tmp/#customtrans3#_auth_users.conf"
+    destination = "/etc/nginx/snippets/auth_users.conf">
+
+    <!--- GENERATE NGINX AUTH SNIPPETS END HERE --->
     
     
     

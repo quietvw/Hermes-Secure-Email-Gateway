@@ -11,6 +11,8 @@
 <CFSET session.license = ""> 
 <!-- Kills the edition session Variable --> 
 <CFSET session.edition = ""> 
+<cfinclude template="/user-auth/inc/google_sso_session.cfm">
+<cfset googleSsoClearSession()>
 <!--- Redirect to Authelia Logout --->
 
 <!--- DETERMINE CONSOLE MODE --->

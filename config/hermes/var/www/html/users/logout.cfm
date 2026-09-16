@@ -32,6 +32,8 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 <cfset session.download_msg = "">
 <cfset session.theUser = "">
 <cfset session.theName = "">
+<cfinclude template="/user-auth/inc/google_sso_session.cfm">
+<cfset googleSsoClearSession()>
 
 
 <!--- DETERMINE CONSOLE MODE --->
@@ -58,4 +60,3 @@ select parameter, value2 from parameters2 where parameter='console.host'
 
 <!--- /CFIF GETSONSOLEMODE.VALUE --->
 </cfif>
-

@@ -8,6 +8,7 @@
     <cfheader name="Remote-Email" value="#googleAuthContext.email#">
     <cfheader name="Remote-Name" value="#googleAuthContext.name#">
     <cfheader name="Remote-Groups" value="#googleAuthContext.groups#">
+    <cfheader name="X-Hermes-Auth-Source" value="google_sso">
     <cfheader statuscode="200" statustext="Authorized">
     <cfoutput>Authorized</cfoutput>
 <cfelse>

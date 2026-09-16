@@ -45,6 +45,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 <cfset googleProvisionRecipientId = 0>
 <cfset recipientCreated = false>
 <cfset userSettingsCreated = false>
+<cfset googleProvisionLdapProvisioned = false>
 
 <cfif recipientEmail EQ "" OR NOT IsValid("email", recipientEmail)>
     <cfset googleProvisionMessage = "Unable to validate your organization account. Please contact your system administrator.">
@@ -73,6 +74,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 <cfset googleProvisionMessage = "An account already exists for this email address.">
                 <cfset googleProvisionExistingAuthType = checkentry.auth_type>
                 <cfset googleProvisionExistingRemoteAuthDomain = checkentry.remoteauth_domain>
+                <cfset googleProvisionRecipientId = checkentry.id>
             <cfelse>
                 <cfquery datasource="hermes">
                     INSERT INTO recipients
@@ -91,8 +93,8 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                         <cfqueryparam value="#googleProvisionValidity#" cfsqltype="cf_sql_integer">,
                         <cfqueryparam value="#googleProvisionCertEncryption#" cfsqltype="cf_sql_integer">,
                         <cfqueryparam value="#googleProvisionCertAlgorithm#" cfsqltype="cf_sql_varchar">,
-                        'local',
-                        NULL,
+                        'remote',
+                        'google',
                         <cfqueryparam value="#googleProvisionEnforceMfa#" cfsqltype="cf_sql_tinyint">
                     )
                 </cfquery>
@@ -110,7 +112,7 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             </cfif>
         </cflock>
 
-        <cfif recipientCreated>
+        <cfif googleProvisionRecipientId GT 0>
             <cftry>
             <cfquery name="checkUserSettings" datasource="hermes">
                 SELECT email
@@ -141,7 +143,30 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 </cfquery>
                 <cfset userSettingsCreated = true>
             </cfif>
+            <cfcatch type="any">
+                <cftry>
+                    <cfif recipientCreated AND googleProvisionRecipientId GT 0>
+                        <cfquery datasource="hermes">
+                            DELETE FROM recipients
+                            WHERE id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
+                        </cfquery>
+                    </cfif>
+                    <cfif userSettingsCreated>
+                        <cfquery datasource="hermes">
+                            DELETE FROM user_settings
+                            WHERE email = <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">
+                        </cfquery>
+                    </cfif>
+                    <cfcatch type="any"></cfcatch>
+                </cftry>
+                <cfset googleProvisionStatus = "error">
+                <cfset googleProvisionMessage = "Unable to finish creating your account. Please contact your system administrator.">
+            </cfcatch>
+            </cftry>
+        </cfif>
 
+        <cfif recipientCreated AND googleProvisionStatus NEQ "error">
+            <cftry>
             <cfset show_pdf_enabled = googleProvisionPdfEnabled>
             <cfset show_smime_enabled = googleProvisionSmimeEnabled>
             <cfset show_pgp_enabled = googleProvisionPgpEnabled>
@@ -211,15 +236,16 @@ This file is part of Hermes Secure Email Gateway Community Edition.
             </cfif>
 
             <cfset ldapAddError = "">
-            <cfinclude template="/admin/2/inc/ldap_add_user_relay.cfm">
-            <cfset ldapProvisionSucceeded = (IsDefined("ldapUserCreated") AND ldapUserCreated)>
-            <cfif ldapProvisionSucceeded AND Len(Trim(ldapAddError)) GT 0 AND NOT FindNoCase("Already exists", ldapAddError)>
-                <cfset ldapProvisionSucceeded = false>
-            </cfif>
-
-            <cfif NOT ldapProvisionSucceeded>
-                <cfthrow message="Unable to provision LDAP user.">
-            </cfif>
+            <cftry>
+                <cfinclude template="/admin/2/inc/ldap_add_user_relay.cfm">
+                <cfset googleProvisionLdapProvisioned = (IsDefined("ldapUserCreated") AND ldapUserCreated)>
+                <cfif googleProvisionLdapProvisioned AND Len(Trim(ldapAddError)) GT 0 AND NOT FindNoCase("Already exists", ldapAddError)>
+                    <cfset googleProvisionLdapProvisioned = false>
+                </cfif>
+                <cfcatch type="any">
+                    <cfset googleProvisionLdapProvisioned = false>
+                </cfcatch>
+            </cftry>
 
             <cfset welcomeEmailSent = true>
             <cftry>
@@ -231,41 +257,22 @@ This file is part of Hermes Secure Email Gateway Community Edition.
 
             <cfif welcomeEmailSent>
                 <cfset googleProvisionStatus = "created">
-                <cfset googleProvisionMessage = "Your account has been created and a welcome email has been sent.">
+                <cfif googleProvisionLdapProvisioned>
+                    <cfset googleProvisionMessage = "Your account has been created and a welcome email has been sent.">
+                <cfelse>
+                    <cfset googleProvisionMessage = "Your account has been created. Some background access settings still need to sync, but you can sign in now.">
+                </cfif>
             <cfelse>
                 <cfset googleProvisionStatus = "created_email_failed">
-                <cfset googleProvisionMessage = "Your account has been created, but we were unable to send the welcome email. Please contact your system administrator for password setup instructions.">
+                <cfif googleProvisionLdapProvisioned>
+                    <cfset googleProvisionMessage = "Your account has been created, but we were unable to send the welcome email. Please contact your system administrator for password setup instructions.">
+                <cfelse>
+                    <cfset googleProvisionMessage = "Your account has been created, but some background setup tasks are still pending. Please contact your system administrator if you cannot access all features yet.">
+                </cfif>
             </cfif>
             <cfcatch type="any">
-                <cftry>
-                    <cfif googleProvisionRecipientId GT 0>
-                        <cfquery datasource="hermes">
-                            DELETE FROM cert_generation_queue
-                            WHERE recipient_id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
-                        </cfquery>
-                        <cfquery datasource="hermes">
-                            DELETE FROM recipient_certificates
-                            WHERE user_id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
-                        </cfquery>
-                        <cfquery datasource="hermes">
-                            DELETE FROM recipient_keystores
-                            WHERE user_id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
-                        </cfquery>
-                        <cfquery datasource="hermes">
-                            DELETE FROM recipients
-                            WHERE id = <cfqueryparam value="#googleProvisionRecipientId#" cfsqltype="cf_sql_integer">
-                        </cfquery>
-                    </cfif>
-                    <cfif userSettingsCreated>
-                        <cfquery datasource="hermes">
-                            DELETE FROM user_settings
-                            WHERE email = <cfqueryparam value="#recipientEmail#" cfsqltype="cf_sql_varchar">
-                        </cfquery>
-                    </cfif>
-                    <cfcatch type="any"></cfcatch>
-                </cftry>
-                <cfset googleProvisionStatus = "error">
-                <cfset googleProvisionMessage = "Unable to finish creating your account. Please contact your system administrator.">
+                <cfset googleProvisionStatus = "created_email_failed">
+                <cfset googleProvisionMessage = "Your account has been created, but some optional setup tasks could not be completed automatically. Please contact your system administrator if you need additional help.">
             </cfcatch>
             </cftry>
         </cfif>
