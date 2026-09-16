@@ -2,62 +2,60 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export ROOT
 
-fail() {
-  echo "FAIL: $1" >&2
-  exit 1
-}
+python3 <<'PY'
+import os
+import pathlib
+import re
+import sys
 
-grep -q "include /etc/nginx/snippets/auth_admin.conf" \
-  "$ROOT/config/hermes/opt/hermes/templates/hermes-ssl.conf" \
-  || fail "admin location is not wired to auth_admin.conf"
+root = pathlib.Path(os.environ["ROOT"])
 
-grep -q "include /etc/nginx/snippets/auth_users.conf" \
-  "$ROOT/config/hermes/opt/hermes/templates/hermes-ssl.conf" \
-  || fail "users location is not wired to auth_users.conf"
+def read(relpath: str) -> str:
+    return (root / relpath).read_text(encoding="utf-8")
 
-grep -q "google_sso_auth_request.cfm?target=admin" \
-  "$ROOT/config/hermes/opt/hermes/templates/hermes-ssl.conf" \
-  || fail "admin auth-request bridge endpoint is missing"
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        print(f"FAIL: {message}", file=sys.stderr)
+        raise SystemExit(1)
 
-grep -q "google_sso_auth_request.cfm?target=users" \
-  "$ROOT/config/hermes/opt/hermes/templates/hermes-ssl.conf" \
-  || fail "users auth-request bridge endpoint is missing"
+ssl_conf = read("config/hermes/opt/hermes/templates/hermes-ssl.conf")
+admin_app = read("config/hermes/var/www/html/admin/Application.cfc")
+users_app = read("config/hermes/var/www/html/users/Application.cfc")
+google_login = read("config/hermes/var/www/html/user-auth/google_login.cfm")
+google_provision = read("config/hermes/var/www/html/user-auth/inc/google_auto_provision_relay_recipient.cfm")
 
-grep -q "/user-auth/google_sso_verify.cfm?target=admin" \
-  "$ROOT/config/hermes/var/www/html/admin/Application.cfc" \
-  || fail "admin application does not use Google SSO verify bridge"
+require("include /etc/nginx/snippets/auth_admin.conf" in ssl_conf, "admin location is not wired to auth_admin.conf")
+require("include /etc/nginx/snippets/auth_users.conf" in ssl_conf, "users location is not wired to auth_users.conf")
+require("google_sso_auth_request.cfm?target=admin" in ssl_conf, "admin auth-request bridge endpoint is missing")
+require("google_sso_auth_request.cfm?target=users" in ssl_conf, "users auth-request bridge endpoint is missing")
 
-grep -q "/user-auth/google_sso_verify.cfm?target=users" \
-  "$ROOT/config/hermes/var/www/html/users/Application.cfc" \
-  || fail "users application does not use Google SSO verify bridge"
+require("/user-auth/google_sso_verify.cfm?target=admin" in admin_app, "admin application does not use Google SSO verify bridge")
+require("/user-auth/google_sso_verify.cfm?target=users" in users_app, "users application does not use Google SSO verify bridge")
 
-grep -q "googleSsoIssueSession(flowEmail, flowName)" \
-  "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
-  || fail "google login does not issue bridge sessions"
+require('ListFindNoCase("created,created_email_failed,exists", googleProvisionStatus)' in google_login, "google login success redirect block is missing")
+require("googleSsoIssueSession(flowEmail, flowName)" in google_login, "google login does not issue bridge sessions")
+require("has_admin_access" in google_login and "has_user_access" in google_login, "google login does not compute redirect access flags")
+require(re.search(r"status\s*=\s*'OK'", google_login) is not None, "google login does not guard user redirects with active recipient status")
+require(re.search(r"<cflocation\s+url=\"/admin/\"\s+addtoken=\"no\">", google_login) is not None, "google login does not route admins to /admin/")
+require(re.search(r"<cflocation\s+url=\"/users/\"\s+addtoken=\"no\">", google_login) is not None, "google login does not route users to /users/")
 
-grep -q "AND status = 'OK'" \
-  "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
-  || fail "google login does not guard redirects with active recipient status"
+require(re.search(r'googleProvisionStatus\s*=\s*"disabled"', google_provision) is not None, "google auto-provisioning does not block disabled recipients")
+require("ldap_get_user_groups.cfm" in google_provision, "google auto-provisioning does not verify pre-existing LDAP relay users")
+require(
+    re.search(r"ldapUserFound\s+AND\s+CompareNoCase\(ldapUsername,\s*recipientEmail\)\s+EQ\s+0\s+AND\s+isRelay", google_provision) is not None,
+    "google auto-provisioning does not confirm the existing LDAP relay identity matches the recipient"
+)
 
-grep -q "googleProvisionStatus = \"disabled\"" \
-  "$ROOT/config/hermes/var/www/html/user-auth/inc/google_auto_provision_relay_recipient.cfm" \
-  || fail "google auto-provisioning does not block disabled recipients"
+require(
+    re.search(
+        r'session\.theGroups CONTAINS "admins"\s+AND NOT\s+\(session\.theGroups CONTAINS "relays"\s+OR session\.theGroups CONTAINS "mailboxes"\).*?<cflocation url="/admin/" addtoken="no">',
+        users_app,
+        re.S,
+    ) is not None,
+    "users application does not redirect admin-only bridge sessions to /admin/",
+)
 
-grep -q "ldap_get_user_groups.cfm" \
-  "$ROOT/config/hermes/var/www/html/user-auth/inc/google_auto_provision_relay_recipient.cfm" \
-  || fail "google auto-provisioning does not verify pre-existing LDAP relay users"
-
-grep -q "<cflocation url=\"/admin/\" addtoken=\"no\">" \
-  "$ROOT/config/hermes/var/www/html/users/Application.cfc" \
-  || fail "users application does not redirect admin-only bridge sessions to /admin/"
-
-grep -q "<cflocation url=\"/admin/\" addtoken=\"no\">" \
-  "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
-  || fail "google login does not route admins to /admin/"
-
-grep -q "<cflocation url=\"/users/\" addtoken=\"no\">" \
-  "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
-  || fail "google login does not route users to /users/"
-
-echo "PASS: Google SSO bridge wiring looks correct"
+print("PASS: Google SSO bridge wiring looks correct")
+PY
