@@ -43,7 +43,10 @@ function googleSsoSignValue(rawValue) {
 
 function googleSsoGenerateIvHex() {
     var secureRandom = CreateObject("java", "java.security.SecureRandom");
-    return LCase(BinaryEncode(secureRandom.generateSeed(16), "Hex"));
+    var byteArrayClass = CreateObject("java", "java.lang.Byte").TYPE;
+    var ivBytes = CreateObject("java", "java.lang.reflect.Array").newInstance(byteArrayClass, 16);
+    secureRandom.nextBytes(ivBytes);
+    return LCase(BinaryEncode(ivBytes, "Hex"));
 }
 
 function googleSsoReadKey() {

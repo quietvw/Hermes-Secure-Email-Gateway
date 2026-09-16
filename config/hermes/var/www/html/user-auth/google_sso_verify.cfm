@@ -37,7 +37,11 @@
         <cfhttpparam type="header" name="X-Original-URL" value="https://#verifyHost##authTargetPath#">
         <cfhttpparam type="header" name="Cookie" value="#requestCookies#">
     </cfhttp>
-    <cfoutput>#Trim(verifyResult.fileContent)#</cfoutput>
+    <cfif StructKeyExists(verifyResult, "statusCode") AND Left(verifyResult.statusCode, 3) EQ "200" AND Trim(verifyResult.fileContent) NEQ "Unauthorized">
+        <cfoutput>Authorized</cfoutput>
+    <cfelse>
+        <cfoutput>Unauthorized</cfoutput>
+    </cfif>
     <cfcatch type="any">
         <cfoutput>Unauthorized</cfoutput>
     </cfcatch>
