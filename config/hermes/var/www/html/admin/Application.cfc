@@ -219,6 +219,7 @@ the url: https://#ConsoleHost#</cfoutput>
        
          <cfhttp url="https://#ConsoleHost#/user-auth/google_sso_verify.cfm?target=admin" method="GET" result="verifyResult" timeout="10" throwOnError="no">
          <cfhttpparam type="header" name="accept" value="*/*">
+         <cfhttpparam type="header" name="X-Original-URL" value="https://#ConsoleHost#/admin/">
          <cfhttpparam type="header" name="Cookie" value="#theCookie#">
          </cfhttp>
          <cfset curlresult = Trim(verifyResult.fileContent)>

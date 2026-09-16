@@ -55,9 +55,11 @@ require("java.security.SecureRandom" in google_session and "nextBytes" in google
 require("AES/CBC/PKCS5Padding" in google_session, "google bridge cookie does not use an explicit CBC mode")
 require(re.search(r'googleSsoSignValue\(ivHex\s*&\s*":"\s*&\s*encryptedPayload\)', google_session) is not None, "google bridge cookie does not sign the IV and ciphertext together")
 require("cgi.server_name" in google_verify and "console.host" not in google_verify, "google verify fallback still depends on console.host instead of the current request host")
-require("Authorized" in google_verify and "Unauthorized" in google_verify and "/api/verify" in google_verify, "google verify fallback does not reduce the upstream response to a simple authorization result")
+require("responseHeader" in google_verify and "Remote-User" in google_verify and "/api/verify" in google_verify, "google verify fallback does not authorize from the upstream verifier headers")
 require("https://hermes_console_host$request_uri" in read("config/hermes/opt/hermes/templates/auth_admin.conf"), "admin auth redirect is not pinned to the configured console host")
 require("https://hermes_console_host$request_uri" in read("config/hermes/opt/hermes/templates/auth_users.conf"), "users auth redirect is not pinned to the configured console host")
+require('name="X-Original-URL" value="https://#ConsoleHost#/admin/"' in admin_app, "admin application does not pass its original URL to the verifier")
+require('name="X-Original-URL" value="https://#ConsoleHost#/users/"' in users_app, "users application does not pass its original URL to the verifier")
 
 print("PASS: Google SSO bridge wiring looks correct")
 PY
