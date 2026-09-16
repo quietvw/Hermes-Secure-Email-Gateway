@@ -40,11 +40,15 @@
        <!--- Authentication Session --->
 
 <!--- GET CONSOLE HOST --->
-<cfquery name = "getconsolehost" datasource = "hermes">
-select value2 from parameters2 where module = 'console' and parameter = 'console.host'
-</cfquery>
-
-<cfset consoleHost = "#getconsolehost.value2#">
+<cfset consoleHost = StructKeyExists(cgi, "server_name") ? Trim(cgi.server_name) : "">
+<cfif consoleHost EQ "" AND StructKeyExists(cgi, "http_host")>
+<cfset consoleHost = REReplace(Trim(cgi.http_host), ":\d+$", "", "all")>
+</cfif>
+<cfif consoleHost EQ "" OR NOT REFind("^[A-Za-z0-9.-]+$", consoleHost)>
+<cfset m="User Application.cfc: unable to determine a safe console host">
+<cfinclude template="/user-auth/error.cfm">
+<cfabort>
+</cfif>
 
 
       <cfset reqData = GetHttpRequestData() />

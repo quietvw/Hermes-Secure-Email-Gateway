@@ -25,6 +25,8 @@ admin_app = read("config/hermes/var/www/html/admin/Application.cfc")
 users_app = read("config/hermes/var/www/html/users/Application.cfc")
 google_login = read("config/hermes/var/www/html/user-auth/google_login.cfm")
 google_provision = read("config/hermes/var/www/html/user-auth/inc/google_auto_provision_relay_recipient.cfm")
+google_session = read("config/hermes/var/www/html/user-auth/inc/google_sso_session.cfm")
+google_verify = read("config/hermes/var/www/html/user-auth/google_sso_verify.cfm")
 
 require("include /etc/nginx/snippets/auth_admin.conf" in ssl_conf, "admin location is not wired to auth_admin.conf")
 require("include /etc/nginx/snippets/auth_users.conf" in ssl_conf, "users location is not wired to auth_users.conf")
@@ -47,6 +49,11 @@ require(
     re.search(r"ldapUserFound\s+AND\s+CompareNoCase\(ldapUsername,\s*recipientEmail\)\s+EQ\s+0\s+AND\s+isRelay", google_provision) is not None,
     "google auto-provisioning does not confirm the existing LDAP relay identity matches the recipient"
 )
+
+require("googleSsoGenerateIvHex" in google_session, "google bridge cookie does not generate a per-session IV")
+require("AES/CBC/PKCS5Padding" in google_session, "google bridge cookie does not use an explicit CBC mode")
+require(re.search(r'googleSsoSignValue\(ivHex\s*&\s*":"\s*&\s*encryptedPayload\)', google_session) is not None, "google bridge cookie does not sign the IV and ciphertext together")
+require("cgi.server_name" in google_verify and "console.host" not in google_verify, "google verify fallback still depends on console.host instead of the current request host")
 
 require(
     re.search(

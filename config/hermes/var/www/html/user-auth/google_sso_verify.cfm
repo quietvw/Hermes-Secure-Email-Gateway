@@ -8,20 +8,20 @@
     <cfabort>
 </cfif>
 
-<cfquery name="getConsoleHost" datasource="hermes">
-    SELECT value2
-    FROM parameters2
-    WHERE module = 'console' AND parameter = 'console.host'
-</cfquery>
+<cfset authTargetPath = LCase(url.target) EQ "admin" ? "/admin/" : "/users/">
+<cfset requestCookies = "">
+<cfset verifyHost = StructKeyExists(cgi, "server_name") ? Trim(cgi.server_name) : "">
+<cfset reqData = GetHttpRequestData()>
 
-<cfif getConsoleHost.recordcount LT 1 OR Len(Trim(getConsoleHost.value2)) EQ 0>
+<cfif verifyHost EQ "" AND StructKeyExists(cgi, "http_host")>
+    <cfset verifyHost = REReplace(Trim(cgi.http_host), ":\d+$", "", "all")>
+</cfif>
+
+<cfif verifyHost EQ "" OR NOT REFind("^[A-Za-z0-9.-]+$", verifyHost)>
     <cfoutput>Unauthorized</cfoutput>
     <cfabort>
 </cfif>
 
-<cfset authTargetPath = LCase(url.target) EQ "admin" ? "/admin/" : "/users/">
-<cfset requestCookies = "">
-<cfset reqData = GetHttpRequestData()>
 <cfif IsStruct(reqData) AND StructKeyExists(reqData, "Headers") AND IsStruct(reqData.Headers) AND StructKeyExists(reqData.Headers, "cookie")>
     <cfset requestCookies = reqData.Headers["cookie"]>
 </cfif>
@@ -32,9 +32,9 @@
 </cfif>
 
 <cftry>
-    <cfhttp url="https://#getConsoleHost.value2#/api/verify" method="GET" result="verifyResult" timeout="10" throwOnError="no">
+    <cfhttp url="https://#verifyHost#/api/verify" method="GET" result="verifyResult" timeout="10" throwOnError="no">
         <cfhttpparam type="header" name="accept" value="*/*">
-        <cfhttpparam type="header" name="X-Original-URL" value="https://#getConsoleHost.value2##authTargetPath#">
+        <cfhttpparam type="header" name="X-Original-URL" value="https://#verifyHost##authTargetPath#">
         <cfhttpparam type="header" name="Cookie" value="#requestCookies#">
     </cfhttp>
     <cfoutput>#Trim(verifyResult.fileContent)#</cfoutput>

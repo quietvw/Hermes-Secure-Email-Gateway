@@ -41,6 +41,10 @@ function googleSsoSignValue(rawValue) {
     return LCase(HMAC(arguments.rawValue, googleSsoReadKey(), "HmacSHA256", "UTF-8"));
 }
 
+function googleSsoGenerateIvHex() {
+    return LCase(Left(Hash(GenerateSecretKey("AES") & CreateUUID() & Now(), "SHA-256"), 32));
+}
+
 function googleSsoReadKey() {
     if (NOT StructKeyExists(request, "googleSsoKey")) {
         request.googleSsoKey = Trim(FileRead("/opt/hermes/keys/hermes.key", "utf-8"));
@@ -87,24 +91,27 @@ function googleSsoReadSession() {
     }
 
     try {
-        var separatorPosition = Find(":", rawCookieValue);
+        var firstSeparator = Find(":", rawCookieValue);
+        var secondSeparator = firstSeparator GT 0 ? Find(":", rawCookieValue, firstSeparator + 1) : 0;
         var cookieSignature = "";
+        var ivHex = "";
         var encryptedPayload = "";
         var decryptedPayload = "";
         var payload = "";
 
-        if (separatorPosition LTE 1) {
+        if (firstSeparator LTE 1 OR secondSeparator LTE firstSeparator) {
             return result;
         }
 
-        cookieSignature = LCase(Left(rawCookieValue, separatorPosition - 1));
-        encryptedPayload = Mid(rawCookieValue, separatorPosition + 1, Len(rawCookieValue) - separatorPosition);
+        cookieSignature = LCase(Left(rawCookieValue, firstSeparator - 1));
+        ivHex = Mid(rawCookieValue, firstSeparator + 1, secondSeparator - firstSeparator - 1);
+        encryptedPayload = Mid(rawCookieValue, secondSeparator + 1, Len(rawCookieValue) - secondSeparator);
 
-        if (cookieSignature NEQ googleSsoSignValue(encryptedPayload)) {
+        if (Len(ivHex) NEQ 32 OR cookieSignature NEQ googleSsoSignValue(ivHex & ":" & encryptedPayload)) {
             return result;
         }
 
-        decryptedPayload = Decrypt(encryptedPayload, googleSsoReadKey(), "AES", "Hex");
+        decryptedPayload = Decrypt(encryptedPayload, googleSsoReadKey(), "AES/CBC/PKCS5Padding", "Hex", BinaryDecode(ivHex, "Hex"));
         payload = DeserializeJSON(decryptedPayload);
 
         if (NOT StructKeyExists(payload, "email") OR NOT IsValid("email", payload.email)) {
@@ -133,8 +140,9 @@ function googleSsoIssueSession(required string email, string name = "", numeric 
         issued_at: googleSsoCurrentEpoch(),
         expires_at: googleSsoCurrentEpoch() + Int(arguments.ttlSeconds)
     };
-    var encryptedPayload = Encrypt(SerializeJSON(payload), googleSsoReadKey(), "AES", "Hex");
-    var signedPayload = googleSsoSignValue(encryptedPayload) & ":" & encryptedPayload;
+    var ivHex = googleSsoGenerateIvHex();
+    var encryptedPayload = Encrypt(SerializeJSON(payload), googleSsoReadKey(), "AES/CBC/PKCS5Padding", "Hex", BinaryDecode(ivHex, "Hex"));
+    var signedPayload = googleSsoSignValue(ivHex & ":" & encryptedPayload) & ":" & ivHex & ":" & encryptedPayload;
 
     cfcookie(
         name = googleSsoCookieName(),
