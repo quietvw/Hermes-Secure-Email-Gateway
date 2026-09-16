@@ -245,7 +245,9 @@ This file is part of Hermes Secure Email Gateway Community Edition.
                 <cfinclude template="/admin/2/inc/ldap_add_user_relay.cfm">
                 <cfset googleProvisionLdapProvisioned = (IsDefined("ldapUserCreated") AND ldapUserCreated)>
                 <cfif NOT googleProvisionLdapProvisioned AND Len(Trim(ldapAddError)) GT 0 AND FindNoCase("Already exists", ldapAddError)>
-                    <cfset googleProvisionLdapProvisioned = true>
+                    <cfset userEmail = recipientEmail>
+                    <cfinclude template="/admin/2/inc/ldap_get_user_groups.cfm">
+                    <cfset googleProvisionLdapProvisioned = ldapUserFound AND CompareNoCase(ldapUsername, recipientEmail) EQ 0 AND isRelay>
                 </cfif>
                 <cfif googleProvisionLdapProvisioned AND Len(Trim(ldapAddError)) GT 0 AND NOT FindNoCase("Already exists", ldapAddError)>
                     <cfset googleProvisionLdapProvisioned = false>

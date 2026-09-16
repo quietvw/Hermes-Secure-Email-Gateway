@@ -103,6 +103,10 @@ the url: https://#ConsoleHost#</cfoutput>
 
        <cfset session.loggedin = "true">
 
+<cfif session.theGroups CONTAINS "admins" AND NOT (session.theGroups CONTAINS "relays" OR session.theGroups CONTAINS "mailboxes")>
+  <cflocation url="/admin/" addtoken="no">
+</cfif>
+
 
   <cfquery name="getid" datasource="hermes">
   select id from maddr where email='#session.email#'

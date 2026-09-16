@@ -44,6 +44,14 @@ grep -q "googleProvisionStatus = \"disabled\"" \
   "$ROOT/config/hermes/var/www/html/user-auth/inc/google_auto_provision_relay_recipient.cfm" \
   || fail "google auto-provisioning does not block disabled recipients"
 
+grep -q "ldap_get_user_groups.cfm" \
+  "$ROOT/config/hermes/var/www/html/user-auth/inc/google_auto_provision_relay_recipient.cfm" \
+  || fail "google auto-provisioning does not verify pre-existing LDAP relay users"
+
+grep -q "<cflocation url=\"/admin/\" addtoken=\"no\">" \
+  "$ROOT/config/hermes/var/www/html/users/Application.cfc" \
+  || fail "users application does not redirect admin-only bridge sessions to /admin/"
+
 grep -q "<cflocation url=\"/admin/\" addtoken=\"no\">" \
   "$ROOT/config/hermes/var/www/html/user-auth/google_login.cfm" \
   || fail "google login does not route admins to /admin/"

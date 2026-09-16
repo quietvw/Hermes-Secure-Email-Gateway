@@ -215,6 +215,9 @@ function googleSsoBuildAuthContext(required string target) {
             ArrayAppend(authGroups, "admins");
         }
         result.portalPath = "/admin/";
+        if (Len(Trim(result.username)) EQ 0) {
+            result.username = adminQuery.username;
+        }
         if (result.target EQ "admin") {
             result.username = adminQuery.username;
         }
@@ -230,7 +233,7 @@ function googleSsoBuildAuthContext(required string target) {
     if (result.target EQ "admin") {
         result.authorized = ArrayFindNoCase(authGroups, "admins") GT 0;
     } else if (result.target EQ "users") {
-        result.authorized = ArrayFindNoCase(authGroups, "relays") GT 0 OR ArrayFindNoCase(authGroups, "mailboxes") GT 0;
+        result.authorized = ArrayFindNoCase(authGroups, "relays") GT 0 OR ArrayFindNoCase(authGroups, "mailboxes") GT 0 OR ArrayFindNoCase(authGroups, "admins") GT 0;
     }
 
     if (Len(Trim(result.username)) EQ 0) {
