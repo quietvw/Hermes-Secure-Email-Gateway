@@ -11,6 +11,7 @@
 <cfset authTargetPath = LCase(url.target) EQ "admin" ? "/admin/" : "/users/">
 <cfset requestCookies = "">
 <cfset verifyHost = StructKeyExists(cgi, "server_name") ? Trim(cgi.server_name) : "">
+<cfset verifyHostPattern = "">
 <cfset originalUrl = "">
 <cfset reqData = GetHttpRequestData()>
 
@@ -23,11 +24,13 @@
     <cfabort>
 </cfif>
 
+<cfset verifyHostPattern = Replace(verifyHost, ".", "\.", "all")>
+
 <cfif IsStruct(reqData) AND StructKeyExists(reqData, "Headers") AND IsStruct(reqData.Headers) AND StructKeyExists(reqData.Headers, "x-original-url")>
     <cfset originalUrl = Trim(reqData.Headers["x-original-url"])>
 </cfif>
 
-<cfif originalUrl EQ "" OR NOT ReFindNoCase("^https://#verifyHost##authTargetPath#", originalUrl)>
+<cfif originalUrl EQ "" OR NOT ReFindNoCase("^https://#verifyHostPattern##authTargetPath#(?:$|[?#/])", originalUrl)>
     <cfset originalUrl = "https://#verifyHost##authTargetPath#">
 </cfif>
 

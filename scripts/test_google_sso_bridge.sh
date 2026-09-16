@@ -46,7 +46,7 @@ require(re.search(r"<cflocation\s+url=\"/users/\"\s+addtoken=\"no\">", google_lo
 require(re.search(r'googleProvisionStatus\s*=\s*"disabled"', google_provision) is not None, "google auto-provisioning does not block disabled recipients")
 require("ldap_get_user_groups.cfm" in google_provision, "google auto-provisioning does not verify pre-existing LDAP relay users")
 require(
-    re.search(r"ldapUserFound\s+AND\s+CompareNoCase\(ldapUsername,\s*recipientEmail\)\s+EQ\s+0\s+AND\s+isRelay", google_provision) is not None,
+    re.search(r"ldapUserFound\s+AND\s+CompareNoCase\(ldapUsername,\s*expectedLdapUsername\)\s+EQ\s+0\s+AND\s+isRelay", google_provision) is not None,
     "google auto-provisioning does not confirm the existing LDAP relay identity matches the recipient"
 )
 
