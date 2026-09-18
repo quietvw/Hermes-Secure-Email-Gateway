@@ -294,7 +294,7 @@ queryExecute(
     -->
     <cfexecute
       name="/bin/sh"
-      arguments='-c "chmod 600 \"#smtpHashInputFile#\" && cat \"#smtpHashInputFile#\" | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && { cat \"$tmp2\"; printf \"\n\"; cat \"$tmp2\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
+      arguments='-c "chmod 600 \"$1\" && cat \"$1\" | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && { cat \"$tmp2\"; printf \"\n\"; cat \"$tmp2\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''" sh "#smtpHashInputFile#"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
@@ -403,12 +403,25 @@ queryExecute(
   <cfif form.action EQ "delete_smtp_credential">
     <cfparam name="form.id" default="">
     <cfif IsNumeric(form.id)>
+      <cfquery name="getDeleteSmtpCred" datasource="hermes">
+        SELECT username
+        FROM transactional_smtp_credentials
+        WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
+          AND LEFT(username, 5) = 'smtp_'
+        LIMIT 1
+      </cfquery>
+      <cfif getDeleteSmtpCred.recordcount EQ 1>
+      <cfquery datasource="hermes">
+        DELETE FROM app_passwords
+        WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
+      </cfquery>
       <cfquery datasource="hermes">
         DELETE FROM transactional_smtp_credentials
         WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
           AND LEFT(username, 5) = 'smtp_'
       </cfquery>
       <cfset session.m = 6>
+      </cfif>
     </cfif>
     <cflocation url="view_transactional_emails.cfm" addtoken="no">
   </cfif>
