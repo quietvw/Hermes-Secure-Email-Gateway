@@ -52,33 +52,25 @@ require_ansible() {
 write_default_vars_file() {
     python3 - <<'PY' "${VARS_FILE}" "${SCRIPT_DIR}"
 from pathlib import Path
+import json
 import sys
 
 path = Path(sys.argv[1])
 repo_root = sys.argv[2]
-path.write_text(
-    "\n".join(
-        [
-            "---",
-            f"hermes_root: {repo_root}",
-            "hermes_host_ip: 192.0.2.10",
-            "hermes_mail_hostname: smtp.example.com",
-            "hermes_mail_domain: example.com",
-            "hermes_dns_forwarders:",
-            "  - 1.1.1.1",
-            "  - 8.8.8.8",
-            "",
-            "hermes_data_mount: /mnt/data",
-            "hermes_archive_mount: /mnt/archive",
-            "hermes_vmail_mount: /mnt/vmail",
-            "hermes_files_mount: /mnt/files",
-            "hermes_enable_nextcloud: false",
-            "hermes_eula_accepted: false",
-            "",
-        ]
-    ),
-    encoding="utf-8",
-)
+payload = {
+    "hermes_root": repo_root,
+    "hermes_host_ip": "192.0.2.10",
+    "hermes_mail_hostname": "smtp.example.com",
+    "hermes_mail_domain": "example.com",
+    "hermes_dns_forwarders": ["1.1.1.1", "8.8.8.8"],
+    "hermes_data_mount": "/mnt/data",
+    "hermes_archive_mount": "/mnt/archive",
+    "hermes_vmail_mount": "/mnt/vmail",
+    "hermes_files_mount": "/mnt/files",
+    "hermes_enable_nextcloud": False,
+    "hermes_eula_accepted": False,
+}
+path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 }
 
@@ -146,17 +138,33 @@ configure() {
     read -r -p "Pre-accept the Hermes EULA for Ansible install runs [false]: " eula_accepted
     eula_accepted="${eula_accepted:-false}"
 
-    cat > "${INVENTORY_FILE}" <<EOF
-all:
-  children:
-    hermes_hosts:
-      hosts:
-        ${target_host}:
-$( [[ "${target_host}" == "localhost" ]] && printf '          ansible_connection: local\n' )
-EOF
+    python3 - <<'PY' "${INVENTORY_FILE}" "${target_host}"
+from pathlib import Path
+import json
+import sys
+
+path = Path(sys.argv[1])
+target_host = sys.argv[2]
+host_vars = {}
+if target_host == "localhost":
+    host_vars["ansible_connection"] = "local"
+payload = {
+    "all": {
+        "children": {
+            "hermes_hosts": {
+                "hosts": {
+                    target_host: host_vars
+                }
+            }
+        }
+    }
+}
+path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+PY
 
     python3 - <<'PY' "${VARS_FILE}" "${hermes_root}" "${host_ip}" "${mail_hostname}" "${mail_domain}" "${dns_forwarders}" "${data_mount}" "${archive_mount}" "${vmail_mount}" "${files_mount}" "${nextcloud_enabled}" "${eula_accepted}"
 from pathlib import Path
+import json
 import sys
 
 path = Path(sys.argv[1])
@@ -164,30 +172,22 @@ hermes_root, host_ip, mail_hostname, mail_domain, dns_forwarders, data_mount, ar
 forwarders = [item.strip() for item in dns_forwarders.split(",") if item.strip()]
 
 def as_bool(value: str) -> str:
-    return "true" if value.strip().lower() in {"1", "true", "yes", "y"} else "false"
+    return value.strip().lower() in {"1", "true", "yes", "y"}
 
-lines = [
-    "---",
-    f"hermes_root: {hermes_root}",
-    f"hermes_host_ip: {host_ip}",
-    f"hermes_mail_hostname: {mail_hostname}",
-    f"hermes_mail_domain: {mail_domain}",
-    "hermes_dns_forwarders:",
-]
-lines.extend([f"  - {item}" for item in forwarders] or ["  - 1.1.1.1"])
-lines.extend(
-    [
-        "",
-        f"hermes_data_mount: {data_mount}",
-        f"hermes_archive_mount: {archive_mount}",
-        f"hermes_vmail_mount: {vmail_mount}",
-        f"hermes_files_mount: {files_mount}",
-        f"hermes_enable_nextcloud: {as_bool(nextcloud_enabled)}",
-        f"hermes_eula_accepted: {as_bool(eula_accepted)}",
-        "",
-    ]
-)
-path.write_text("\n".join(lines), encoding="utf-8")
+payload = {
+    "hermes_root": hermes_root,
+    "hermes_host_ip": host_ip,
+    "hermes_mail_hostname": mail_hostname,
+    "hermes_mail_domain": mail_domain,
+    "hermes_dns_forwarders": forwarders or ["1.1.1.1"],
+    "hermes_data_mount": data_mount,
+    "hermes_archive_mount": archive_mount,
+    "hermes_vmail_mount": vmail_mount,
+    "hermes_files_mount": files_mount,
+    "hermes_enable_nextcloud": as_bool(nextcloud_enabled),
+    "hermes_eula_accepted": as_bool(eula_accepted),
+}
+path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 
     echo "Wrote ${INVENTORY_FILE}"
