@@ -5,6 +5,17 @@
   gather_facts: false
   vars:
     hermes_repo_root: "{{ playbook_dir | dirname | dirname }}"
+    hermes_installer_state_values:
+      - name: "03-host-ip-confirmed"
+        value: "{{ hermes_host_ip }}"
+      - name: "04-mail-hostname-confirmed"
+        value: "{{ hermes_mail_hostname }}"
+      - name: "04-mail-domain-confirmed"
+        value: "{{ hermes_mail_domain }}"
+      - name: "05-console-host-confirmed"
+        value: "{{ hermes_console_host_effective }}"
+      - name: "03b-dns-forwarders-configured"
+        value: "{{ hermes_dns_forwarders_csv }}"
   pre_tasks:
     - name: Load generated Hermes vars
       ansible.builtin.import_tasks: "{{ hermes_repo_root }}/ansible/tasks/load_vars.yml"
@@ -64,12 +75,7 @@
         dest: "{{ hermes_root_effective }}/.install-state/{{ item.name }}.value"
         mode: "0644"
         content: "{{ item.value }}"
-      loop:
-        - { name: "03-host-ip-confirmed", value: "{{ hermes_host_ip }}" }
-        - { name: "04-mail-hostname-confirmed", value: "{{ hermes_mail_hostname }}" }
-        - { name: "04-mail-domain-confirmed", value: "{{ hermes_mail_domain }}" }
-        - { name: "05-console-host-confirmed", value: "{{ hermes_console_host_effective }}" }
-        - { name: "03b-dns-forwarders-configured", value: "{{ hermes_dns_forwarders_csv }}" }
+      loop: "{{ hermes_installer_state_values }}"
 
     - name: Seed installer state markers
       ansible.builtin.file:
