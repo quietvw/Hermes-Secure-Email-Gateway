@@ -290,10 +290,16 @@ queryExecute(
     </cfif>
 <cfset _transLength = 24>
 <cfinclude template="./inc/generate_customtrans.cfm">
+<cfset smtpHashTempSuffix = customtrans3>
+<cfif REFind("^[A-Za-z0-9_-]{24}$", smtpHashTempSuffix) EQ 0>
+  <cfset session.smtpCredentialErrorDetail = "Temporary hash directory suffix validation failed.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfif>
 <cfif NOT DirectoryExists("/opt/hermes/tmp")>
   <cfdirectory action="create" directory="/opt/hermes/tmp" mode="700">
 </cfif>
-<cfset smtpHashTempDir = "/opt/hermes/tmp/tx_smtp_" & customtrans3>
+<cfset smtpHashTempDir = "/opt/hermes/tmp/tx_smtp_" & smtpHashTempSuffix>
 <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashTempDir) EQ 0>
   <cfset session.smtpCredentialErrorDetail = "Temporary hash directory path validation failed.">
   <cfset session.m = 30>
@@ -308,20 +314,28 @@ queryExecute(
 </cfcatch>
 </cftry>
 <cfset smtpHashInputFile = smtpHashTempDir & "/password.b64">
+<cfset smtpHashScriptFile = smtpHashTempDir & "/generate_hash.sh">
 <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashInputFile) EQ 0>
   <cfset session.smtpCredentialErrorDetail = "Temporary hash file path validation failed.">
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfif>
+<cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashScriptFile) EQ 0>
+  <cfset session.smtpCredentialErrorDetail = "Temporary hash script path validation failed.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfif>
 <cftry>
     <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
+    <cfset smtpHashScript = "#!/bin/sh#Chr(10)#set -eu#Chr(10)#docker_bin=\"$1\"#Chr(10)#input_file=\"$2\"#Chr(10)#\"$docker_bin\" exec -i hermes_dovecot sh -c 'tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap '\\''rm -f \"$tmp2\"'\\'' EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"' < \"$input_file\"#Chr(10)#">
+    <cffile action="write" file="#smtpHashScriptFile#" output="#smtpHashScript#" charset="utf-8" mode="700">
     <!--
       Keep plaintext off process arguments. Pass Base64 data into the
       container, decode there, and feed doveadm via stdin.
     -->
     <cfexecute
-      name="/bin/bash"
-      arguments='-o pipefail -c "#dockerBinary# exec -i hermes_dovecot sh -c ''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"'' < \"$1\"" bash "#smtpHashInputFile#"'
+      name="/bin/sh"
+      arguments='"#smtpHashScriptFile#" "#dockerBinary#" "#smtpHashInputFile#"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
@@ -395,6 +409,14 @@ queryExecute(
     </cfcatch>
     </cftry>
   </cfif>
+  <cfif IsDefined("smtpHashScriptFile") AND smtpHashScriptFile NEQ "" AND FileExists(smtpHashScriptFile)>
+    <cftry>
+      <cffile action="delete" file="#smtpHashScriptFile#">
+    <cfcatch type="any">
+      <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp hash script #smtpHashScriptFile#: #cfcatch.message# #cfcatch.detail#">
+    </cfcatch>
+    </cftry>
+  </cfif>
   <cfif IsDefined("smtpHashTempDir") AND smtpHashTempDir NEQ "" AND DirectoryExists(smtpHashTempDir)>
     <cftry>
       <cfdirectory action="list" directory="#smtpHashTempDir#" name="smtpHashTempDirEntries" type="all">
@@ -462,19 +484,6 @@ queryExecute(
           WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
             AND LEFT(username, 5) = 'smtp_'
         </cfquery>
-        <cfquery name="getRemainingTransactionalUsername" datasource="hermes">
-          SELECT COUNT(*) AS row_count
-          FROM transactional_smtp_credentials
-          WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
-        </cfquery>
-        <cfif Val(getRemainingTransactionalUsername.row_count) EQ 0>
-          <cfquery datasource="hermes">
-            DELETE FROM app_passwords
-            WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
-              AND is_system = 1
-              AND label LIKE 'Transactional SMTP%'
-          </cfquery>
-        </cfif>
       </cftransaction>
         <cfset session.m = 6>
       </cfif>
