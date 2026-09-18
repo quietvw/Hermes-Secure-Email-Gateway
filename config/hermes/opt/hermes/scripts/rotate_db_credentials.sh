@@ -135,17 +135,9 @@ test_root_socket_auth() {
 # '%' and reject credentials that otherwise validate.
 normalize_user_hosts() {
     local user="$1"
-    local user_esc host host_esc
+    local user_esc host host_esc host_rows
     user_esc="$(sql_escape "$user")"
-    while IFS= read -r host; do
-        [[ -z "$host" ]] && continue
-        host_esc="$(sql_escape "$host")"
-        if ! docker exec hermes_db_server mysql -u root -e \
-            "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" >/dev/null 2>&1; then
-            log_error "Failed to drop stale MariaDB user host entry: '${user}'@'${host}'"
-            return 1
-        fi
-    done < <(
+    if ! host_rows="$(
         docker exec hermes_db_server mysql -N -B -u root -e \
             "SELECT Host FROM mysql.user
              WHERE User='${user_esc}'
@@ -155,7 +147,19 @@ normalize_user_hosts() {
                     OR Host LIKE '%.seg_hermes_net_ext'
                     OR Host IN ('localhost','127.0.0.1','::1')
                );"
-    )
+    )"; then
+        log_error "Failed to enumerate MariaDB host entries for user '${user}'"
+        return 1
+    fi
+    while IFS= read -r host; do
+        [[ -z "$host" ]] && continue
+        host_esc="$(sql_escape "$host")"
+        if ! docker exec hermes_db_server mysql -u root -e \
+            "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" >/dev/null 2>&1; then
+            log_error "Failed to drop stale MariaDB user host entry: '${user}'@'${host}'"
+            return 1
+        fi
+    done <<< "$host_rows"
 }
 
 ensure_wildcard_user_exists() {

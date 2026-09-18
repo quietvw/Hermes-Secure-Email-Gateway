@@ -3064,7 +3064,7 @@ create_databases() {
         local collation="${4:-utf8mb4_unicode_ci}"
         local user_esc="${user//\'/\'\'}"
         local pass_esc="${pass//\'/\'\'}"
-        local host host_esc
+        local host host_esc host_rows
 
         log "Creating database '${dbname}' (user '${user}')..."
         # `CREATE USER IF NOT EXISTS` is a NO-OP if the user exists, which
@@ -3077,14 +3077,7 @@ create_databases() {
             CREATE DATABASE IF NOT EXISTS \`${dbname}\` CHARACTER SET utf8mb4 COLLATE ${collation};
         " 2>> "$LOG_FILE"
 
-        while IFS= read -r host; do
-            [[ -z "$host" ]] && continue
-            host_esc="${host//\'/\'\'}"
-            if ! docker exec hermes_db_server mysql -u root -e \
-                "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"; then
-                error "Failed to drop stale MariaDB user host entry '${user}'@'${host}' (see $LOG_FILE)"
-            fi
-        done < <(
+        if ! host_rows="$(
             docker exec hermes_db_server mysql -N -B -u root -e \
                 "SELECT Host FROM mysql.user
                  WHERE User='${user_esc}'
@@ -3094,7 +3087,18 @@ create_databases() {
                         OR Host LIKE '%.seg_hermes_net_ext'
                         OR Host IN ('localhost','127.0.0.1','::1')
                    );" 2>> "$LOG_FILE"
-        )
+        )"; then
+            error "Failed to enumerate stale MariaDB user host entries for '${user}' (see $LOG_FILE)"
+        fi
+
+        while IFS= read -r host; do
+            [[ -z "$host" ]] && continue
+            host_esc="${host//\'/\'\'}"
+            if ! docker exec hermes_db_server mysql -u root -e \
+                "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"; then
+                error "Failed to drop stale MariaDB user host entry '${user}'@'${host}' (see $LOG_FILE)"
+            fi
+        done <<< "$host_rows"
 
         docker exec hermes_db_server mysql -u root -e "
             CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';

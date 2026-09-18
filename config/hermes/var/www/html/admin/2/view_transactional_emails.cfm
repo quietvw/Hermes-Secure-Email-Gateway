@@ -267,7 +267,7 @@ queryExecute(
   -->
   <cfexecute
     name="/bin/sh"
-    arguments='-c "printf %s "#smtpPasswordBase64#" | /usr/local/bin/docker exec -i hermes_dovecot sh -c '\''cat | base64 -d | awk \"{print; print}\" | doveadm pw -s ARGON2ID'\''"'
+    arguments='-c "printf %s "#smtpPasswordBase64#" | /usr/local/bin/docker exec -i hermes_dovecot sh -c '\''cat | base64 -d | tr -d \"\r\n\" | awk \"{printf \\\"%s\\\\n%s\\\\n\\\", \\$0, \\$0}\" | doveadm pw -s ARGON2ID'\''"'
     variable="smtpPasswordHash"
     errorVariable="smtpPasswordHashError"
     timeout="60"></cfexecute>
