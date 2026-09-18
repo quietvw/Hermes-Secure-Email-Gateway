@@ -3102,14 +3102,18 @@ create_databases() {
             fi
         done <<< "$host_rows"
 
-        docker exec hermes_db_server mysql -u root -e "
+        if ! docker exec hermes_db_server mysql -u root -e "
             CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
-        " 2>> "$LOG_FILE"
+        " 2>> "$LOG_FILE"; then
+            error "Failed to ensure MariaDB user '${user}'@'%' exists (see $LOG_FILE)"
+        fi
 
-        docker exec hermes_db_server mysql -u root -e "
+        if ! docker exec hermes_db_server mysql -u root -e "
             ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
             GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${user_esc}'@'%';
-        " 2>> "$LOG_FILE"
+        " 2>> "$LOG_FILE"; then
+            error "Failed to synchronize grants/password for '${user}'@'%' on database '${dbname}' (see $LOG_FILE)"
+        fi
     }
 
     _create_db_user hermes    "$HERMES_DB_USER"     "$HERMES_DB_PASS"
