@@ -57,20 +57,34 @@
         state: directory
         mode: "0755"
 
-    - name: Seed installer mount configuration values
-      ansible.builtin.lineinfile:
+    - name: Remove previously managed installer config keys
+      ansible.builtin.replace:
         path: "{{ hermes_root_effective }}/.hermes_install_config"
-        regexp: "^{{ item.key }}="
-        line: "{{ item.key }}={{ item.value | quote }}"
+        regexp: "^{{ item }}=.*\n?"
+        replace: ""
         create: true
         mode: "0644"
       loop:
-        - { key: "DATA_MOUNT", value: "{{ hermes_data_mount }}" }
-        - { key: "ARCHIVE_MOUNT", value: "{{ hermes_archive_mount }}" }
-        - { key: "VMAIL_MOUNT", value: "{{ hermes_vmail_mount }}" }
-        - { key: "FILES_MOUNT", value: "{{ hermes_files_mount }}" }
-        - { key: "ENABLE_NEXTCLOUD", value: "{{ 'true' if (hermes_enable_nextcloud | default(false) | bool) else 'false' }}" }
-        - { key: "HERMES_ROOT", value: "{{ hermes_root_effective }}" }
+        - "DATA_MOUNT"
+        - "ARCHIVE_MOUNT"
+        - "VMAIL_MOUNT"
+        - "FILES_MOUNT"
+        - "ENABLE_NEXTCLOUD"
+        - "HERMES_ROOT"
+
+    - name: Seed installer mount configuration values
+      ansible.builtin.blockinfile:
+        path: "{{ hermes_root_effective }}/.hermes_install_config"
+        create: true
+        marker: "# {mark} ANSIBLE MANAGED HERMES INSTALL CONFIG"
+        mode: "0644"
+        block: |
+          DATA_MOUNT={{ hermes_data_mount | quote }}
+          ARCHIVE_MOUNT={{ hermes_archive_mount | quote }}
+          VMAIL_MOUNT={{ hermes_vmail_mount | quote }}
+          FILES_MOUNT={{ hermes_files_mount | quote }}
+          ENABLE_NEXTCLOUD={{ ('true' if (hermes_enable_nextcloud | default(false) | bool) else 'false') | quote }}
+          HERMES_ROOT={{ hermes_root_effective | quote }}
 
     - name: Seed installer state values
       ansible.builtin.copy:

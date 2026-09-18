@@ -4810,10 +4810,12 @@ main() {
         state_mark_done "05-console-host-confirmed"
     fi
 
+    local preseeded_dns_forwarders
+    preseeded_dns_forwarders="$(state_get_value "03b-dns-forwarders-configured")"
     if state_is_done "03b-dns-forwarders-configured"; then
-        log "Skip: DNS forwarders already configured ($(state_get_value 03b-dns-forwarders-configured))"
-    elif [[ "${HERMES_INSTALL_PRESEEDED:-0}" == "1" ]] && [[ -n "$(state_get_value "03b-dns-forwarders-configured")" ]]; then
-        log "Using pre-seeded DNS forwarders ($(state_get_value 03b-dns-forwarders-configured))"
+        log "Skip: DNS forwarders already configured (${preseeded_dns_forwarders})"
+    elif [[ "${HERMES_INSTALL_PRESEEDED:-0}" == "1" ]] && [[ -n "${preseeded_dns_forwarders}" ]]; then
+        log "Using pre-seeded DNS forwarders (${preseeded_dns_forwarders})"
         state_mark_done "03b-dns-forwarders-configured"
     else
         prompt_dns_forwarders
