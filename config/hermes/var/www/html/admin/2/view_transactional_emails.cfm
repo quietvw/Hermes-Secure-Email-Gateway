@@ -256,12 +256,6 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
-    <cfif Find(Chr(0), smtpPasswordPlain) GT 0>
-      <cfset session.smtpCredentialErrorDetail = "Generated password contained unsupported null bytes.">
-      <cfset session.m = 30>
-      <cflocation url="view_transactional_emails.cfm" addtoken="no">
-    </cfif>
-
 <cftry>
     <!--
       Use doveadm's non-interactive password option for deterministic hashing.
@@ -380,11 +374,13 @@ queryExecute(
 <cfquery name="getSmtpCreds" datasource="hermes">
   SELECT id, name, username, allowed_senders, allowed_domains, active, created_at
   FROM transactional_smtp_credentials
+  WHERE active = 1
   ORDER BY created_at DESC
 </cfquery>
 <cfquery name="getApiTokens" datasource="hermes">
   SELECT id, name, allowed_senders, allowed_domains, any_ip, ip_allowlist, active, created_at, last_used_at
   FROM transactional_api_tokens
+  WHERE active = 1
   ORDER BY created_at DESC
 </cfquery>
 
