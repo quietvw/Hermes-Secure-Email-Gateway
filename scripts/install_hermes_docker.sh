@@ -3085,7 +3085,14 @@ create_databases() {
                 "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"
         done < <(
             docker exec hermes_db_server mysql -N -B -u root -e \
-                "SELECT Host FROM mysql.user WHERE User='${user_esc}' AND Host <> '%';" 2>> "$LOG_FILE"
+                "SELECT Host FROM mysql.user
+                 WHERE User='${user_esc}'
+                   AND Host <> '%'
+                   AND (
+                        Host REGEXP '^hermes_[A-Za-z0-9_-]+'
+                        OR Host LIKE '%.seg_hermes_net_ext'
+                        OR Host IN ('localhost','127.0.0.1','::1')
+                   );" 2>> "$LOG_FILE"
         )
 
         docker exec hermes_db_server mysql -u root -e "
