@@ -341,7 +341,7 @@ queryExecute(
     -->
     <cfexecute
       name="/bin/sh"
-      arguments='-c "#dockerBinary# exec -i hermes_dovecot sh -c ''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"'' < #smtpHashInputFile#"'
+      arguments='-c "#dockerBinary# exec -i hermes_dovecot sh -c ''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"'' < \"#smtpHashInputFile#\""'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
