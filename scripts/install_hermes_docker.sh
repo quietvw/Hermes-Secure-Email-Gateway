@@ -3064,6 +3064,7 @@ create_databases() {
         local collation="${4:-utf8mb4_unicode_ci}"
         local user_esc="${user//\'/\'\'}"
         local pass_esc="${pass//\'/\'\'}"
+        local host host_esc
 
         log "Creating database '${dbname}' (user '${user}')..."
         # `CREATE USER IF NOT EXISTS` is a NO-OP if the user exists, which
@@ -3075,7 +3076,19 @@ create_databases() {
         # whole step safe to re-run on a partially-stale MariaDB volume.
         docker exec hermes_db_server mysql -u root -e "
             CREATE DATABASE IF NOT EXISTS \`${dbname}\` CHARACTER SET utf8mb4 COLLATE ${collation};
-            DELETE FROM mysql.user WHERE User='${user_esc}' AND Host <> '%';
+        " 2>> "$LOG_FILE"
+
+        while IFS= read -r host; do
+            [[ -z "$host" ]] && continue
+            host_esc="${host//\'/\'\'}"
+            docker exec hermes_db_server mysql -u root -e \
+                "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"
+        done < <(
+            docker exec hermes_db_server mysql -N -B -u root -e \
+                "SELECT Host FROM mysql.user WHERE User='${user_esc}' AND Host <> '%';" 2>> "$LOG_FILE"
+        )
+
+        docker exec hermes_db_server mysql -u root -e "
             CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
             ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
             GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${user_esc}'@'%';

@@ -135,10 +135,18 @@ test_root_socket_auth() {
 # '%' and reject credentials that otherwise validate.
 normalize_user_hosts() {
     local user="$1"
-    local user_esc
+    local user_esc host host_esc
     user_esc="$(sql_escape "$user")"
-    docker exec hermes_db_server mysql -u root -e \
-        "DELETE FROM mysql.user WHERE User='${user_esc}' AND Host <> '%'; FLUSH PRIVILEGES;" >/dev/null 2>&1
+    while IFS= read -r host; do
+        [[ -z "$host" ]] && continue
+        host_esc="$(sql_escape "$host")"
+        docker exec hermes_db_server mysql -u root -e \
+            "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" >/dev/null 2>&1
+    done < <(
+        docker exec hermes_db_server mysql -N -B -u root -e \
+            "SELECT Host FROM mysql.user WHERE User='${user_esc}' AND Host <> '%';"
+    )
+    docker exec hermes_db_server mysql -u root -e "FLUSH PRIVILEGES;" >/dev/null 2>&1
 }
 
 # Restore a single user to its old password, both in the DB and in the creds
