@@ -16,7 +16,7 @@ OUTPUT="$(
     HERMES_INSTALL_AUTO_CONFIRM=1 \
     HERMES_INSTALL_TEST_MODE=1 \
     TERM=xterm \
-    bash "${TMP_DIR}/scripts/install_hermes_docker.sh"
+    bash "${TMP_DIR}/scripts/install_hermes_docker.sh" 2>&1
 )"
 
 printf '%s\n' "${OUTPUT}" | grep -q "Auto-confirming install continuation via HERMES_INSTALL_AUTO_CONFIRM=1"

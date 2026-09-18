@@ -6,6 +6,7 @@
   vars:
     hermes_repo_root: "{{ playbook_dir | dirname | dirname }}"
     hermes_required_script: "system_backup.sh"
+    backup_scope_effective: "{{ backup_scope | default('system') }}"
   pre_tasks:
     - name: Load generated Hermes vars
       ansible.builtin.import_tasks: "{{ hermes_repo_root }}/ansible/tasks/load_vars.yml"
@@ -14,13 +15,13 @@
       ansible.builtin.assert:
         that:
           - (backup_path | default('')) | length > 0
-          - (backup_scope | default('')) in ['system', 'archive', 'vmail', 'nextcloud', 'all']
+          - backup_scope_effective in ['system', 'archive', 'vmail', 'nextcloud', 'all']
         fail_msg: "Set backup_path and backup_scope when running the backup playbook."
 
   tasks:
     - name: Run backup script
       ansible.builtin.command:
-        argv: "{{ ['bash', hermes_root_effective + '/scripts/system_backup.sh', '-P', backup_path, '-B', backup_scope] + (['--cold'] if (backup_cold | default(false) | bool) else []) + (['--no-nc-maintenance'] if (backup_no_nc_maintenance | default(false) | bool) else []) + (['--yes'] if (hermes_yes | default(false) | bool) else []) + (['--dry-run'] if (hermes_dry_run | default(false) | bool) else []) }}"
+        argv: "{{ ['bash', hermes_root_effective + '/scripts/system_backup.sh', '-P', backup_path, '-B', backup_scope_effective] + (['--cold'] if (backup_cold | default(false) | bool) else []) + (['--no-nc-maintenance'] if (backup_no_nc_maintenance | default(false) | bool) else []) + (['--yes'] if (hermes_yes | default(false) | bool) else []) + (['--dry-run'] if (hermes_dry_run | default(false) | bool) else []) }}"
       args:
         chdir: "{{ hermes_root_effective }}"
       environment:

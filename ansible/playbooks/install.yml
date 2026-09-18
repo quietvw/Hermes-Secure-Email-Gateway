@@ -101,6 +101,7 @@
       args:
         chdir: "{{ hermes_root_effective }}"
       environment:
+        HERMES_DIR: "{{ hermes_root_effective }}"
         HERMES_ROOT: "{{ hermes_root_effective }}"
         HERMES_INSTALL_AUTO_CONFIRM: "1"
         TERM: xterm
