@@ -53,6 +53,14 @@ if [[ -z "${HERMES_ROOT:-}" ]]; then
         exit 1
     fi
 fi
+
+HOST_SQL_LIB="${HERMES_ROOT}/config/hermes/opt/hermes/scripts/lib_db_user_hosts.sh"
+if [[ ! -f "$HOST_SQL_LIB" ]]; then
+    echo "ERROR: Missing shared host SQL library at $HOST_SQL_LIB" >&2
+    exit 1
+fi
+source "$HOST_SQL_LIB"
+
 SECRETS_DIR="${HERMES_ROOT}/config/hermes/opt/hermes/keys"
 CREDS_DIR="${HERMES_ROOT}/config/hermes/opt/hermes/creds"
 CONFIG_FILE="${HERMES_ROOT}/.hermes_install_config"
@@ -3085,16 +3093,10 @@ create_databases() {
             error "Failed to create database '${dbname}' (see $LOG_FILE)"
         fi
 
+        local host_query
+        host_query="$(hermes_stale_host_query "$user_esc")"
         if ! host_rows="$(
-            docker exec hermes_db_server mysql -N -B -u root -e \
-                "SELECT Host FROM mysql.user
-                 WHERE User='${user_esc}'
-                   AND Host <> '%'
-                   AND (
-                        Host REGEXP '^hermes_[A-Za-z0-9_-]+'
-                        OR Host LIKE '%.seg_hermes_net_ext'
-                        OR Host IN ('localhost','127.0.0.1','::1')
-                   );" 2>> "$LOG_FILE"
+            docker exec hermes_db_server mysql -N -B -u root -e "$host_query" 2>> "$LOG_FILE"
         )"; then
             error "Failed to enumerate stale MariaDB user host entries for '${user}' (see $LOG_FILE)"
         fi

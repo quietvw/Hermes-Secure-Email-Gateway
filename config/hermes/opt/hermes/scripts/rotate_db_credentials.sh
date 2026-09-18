@@ -54,7 +54,15 @@ if [[ -z "${HERMES_ROOT:-}" ]]; then
         echo "Set HERMES_ROOT environment variable manually and retry." >&2
         exit 1
     fi
+
 fi
+
+HOST_SQL_LIB="${SCRIPT_DIR}/lib_db_user_hosts.sh"
+if [[ ! -f "$HOST_SQL_LIB" ]]; then
+    echo "ERROR: Missing shared host SQL library at $HOST_SQL_LIB" >&2
+    exit 1
+fi
+source "$HOST_SQL_LIB"
 
 # NOTE: /opt/hermes/creds is the path INSIDE the commandbox container
 # (bind-mounted from the host). This script runs ON the host, so we must
@@ -137,16 +145,10 @@ normalize_user_hosts() {
     local user="$1"
     local user_esc host host_esc host_rows
     user_esc="$(sql_escape "$user")"
+    local host_query
+    host_query="$(hermes_stale_host_query "$user_esc")"
     if ! host_rows="$(
-        docker exec hermes_db_server mysql -N -B -u root -e \
-            "SELECT Host FROM mysql.user
-             WHERE User='${user_esc}'
-               AND Host <> '%'
-               AND (
-                    Host REGEXP '^hermes_[A-Za-z0-9_-]+'
-                    OR Host LIKE '%.seg_hermes_net_ext'
-                    OR Host IN ('localhost','127.0.0.1','::1')
-               );"
+        docker exec hermes_db_server mysql -N -B -u root -e "$host_query"
     )"; then
         log_error "Failed to enumerate MariaDB host entries for user '${user}'"
         return 1

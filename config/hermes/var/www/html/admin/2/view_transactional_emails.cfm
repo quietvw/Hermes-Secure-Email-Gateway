@@ -251,10 +251,10 @@ queryExecute(
       <cfset _smtpCredentialGenAttempts = _smtpCredentialGenAttempts + 1>
       <cfset _transLength = 16>
       <cfinclude template="./inc/generate_customtrans.cfm">
-      <cfset smtpUsername = "smtp_" & customtrans3>
+      <cfset smtpUsername = "smtp_" & LCase(customtrans3)>
       <cfset _transLength = 32>
       <cfinclude template="./inc/generate_customtrans.cfm">
-      <cfset smtpPasswordPlain = customtrans3>
+      <cfset smtpPasswordPlain = LCase(customtrans3)>
     </cfloop>
     <cfset session.smtpCredentialErrorDetail = "">
     <cfif REFind("^smtp_[a-z0-9]{16}$", smtpUsername) EQ 0 OR REFind("^[a-z0-9]{32}$", smtpPasswordPlain) EQ 0>
@@ -294,7 +294,7 @@ queryExecute(
     -->
     <cfexecute
       name="/bin/sh"
-      arguments='-c "chmod 600 #smtpHashInputFile# && cat #smtpHashInputFile# | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && { cat \"$tmp2\"; printf \"\n\"; cat \"$tmp2\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
+      arguments='-c "chmod 600 \"#smtpHashInputFile#\" && cat \"#smtpHashInputFile#\" | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && { cat \"$tmp2\"; printf \"\n\"; cat \"$tmp2\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
