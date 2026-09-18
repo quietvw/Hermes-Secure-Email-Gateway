@@ -256,7 +256,12 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
-  <cfset smtpPasswordBase64 = ToBase64(smtpPasswordPlain, "UTF-8")>
+    <cfif Find(Chr(0), smtpPasswordPlain) GT 0>
+      <cfset session.smtpCredentialErrorDetail = "Generated password contained unsupported null bytes.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
+    <cfset smtpPasswordBase64 = ToBase64(smtpPasswordPlain, "UTF-8")>
   <cfif REFind("[^A-Za-z0-9+/=]", smtpPasswordBase64) GT 0>
     <cfset session.smtpCredentialErrorDetail = "Generated password encoding was invalid.">
     <cfset session.m = 30>
