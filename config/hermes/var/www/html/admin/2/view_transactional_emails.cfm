@@ -260,13 +260,14 @@ queryExecute(
 
 <cftry>
   <!--
-    Lucee cfexecute does not support stdin/input.
+    Lucee cfexecute does not support stdin/input directly.
     Pass the password as Base64 so the actual password never appears
-    in the shell command or process arguments.
+    in the shell command or process arguments, then feed doveadm twice
+    to satisfy its password confirmation prompt in non-interactive mode.
   -->
   <cfexecute
     name="/bin/sh"
-    arguments='-c "printf %s "#smtpPasswordBase64#" | base64 -d | /usr/local/bin/docker exec -i hermes_dovecot doveadm pw -s ARGON2ID"'
+    arguments='-c "pw=$(printf %s "#smtpPasswordBase64#" | base64 -d); printf \"%s\n%s\n\" \"$pw\" \"$pw\" | /usr/local/bin/docker exec -i hermes_dovecot doveadm pw -s ARGON2ID"'
     variable="smtpPasswordHash"
     errorVariable="smtpPasswordHashError"
     timeout="60"></cfexecute>
