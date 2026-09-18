@@ -327,15 +327,15 @@ queryExecute(
 </cfif>
 <cftry>
     <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
-    <cfset smtpHashScript = "#!/bin/sh#Chr(10)#set -eu#Chr(10)#docker_bin=\"$1\"#Chr(10)#input_file=\"$2\"#Chr(10)#\"$docker_bin\" exec -i hermes_dovecot sh -c 'tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap '\\''rm -f \"$tmp2\"'\\'' EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"' < \"$input_file\"#Chr(10)#">
+    <cfset smtpHashScript = "#!/bin/sh#Chr(10)#set -eu#Chr(10)#docker_bin='#dockerBinary#'#Chr(10)#input_file='#smtpHashInputFile#'#Chr(10)#\"$docker_bin\" exec -i hermes_dovecot sh -c 'tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap '\\''rm -f \"$tmp2\"'\\'' EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"' < \"$input_file\"#Chr(10)#">
     <cffile action="write" file="#smtpHashScriptFile#" output="#smtpHashScript#" charset="utf-8" mode="700">
     <!--
       Keep plaintext off process arguments. Pass Base64 data into the
       container, decode there, and feed doveadm via stdin.
     -->
     <cfexecute
-      name="#smtpHashScriptFile#"
-      arguments='#dockerBinary# #smtpHashInputFile#'
+      name="/bin/sh"
+      arguments='#smtpHashScriptFile#'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
@@ -457,13 +457,18 @@ queryExecute(
   <cfif form.action EQ "revoke_smtp_credential">
     <cfparam name="form.id" default="">
     <cfif IsNumeric(form.id)>
-      <cfquery datasource="hermes">
+      <cfquery datasource="hermes" result="revokeSmtpCredentialResult">
         UPDATE transactional_smtp_credentials
         SET active = 0, revoked_at = NOW()
         WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
           AND LEFT(username, 5) = 'smtp_'
       </cfquery>
-      <cfset session.m = 5>
+      <cfif StructKeyExists(revokeSmtpCredentialResult, "recordcount") AND revokeSmtpCredentialResult.recordcount GT 0>
+        <cfset session.m = 5>
+      <cfelse>
+        <cfset session.m = 30>
+        <cfset session.smtpCredentialErrorDetail = "SMTP credential revoke request did not match an active SMTP credential.">
+      </cfif>
     </cfif>
     <cflocation url="view_transactional_emails.cfm" addtoken="no">
   </cfif>
