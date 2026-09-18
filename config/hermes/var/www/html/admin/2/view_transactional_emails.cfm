@@ -421,14 +421,21 @@ queryExecute(
       <cfif getDeleteSmtpCred.recordcount EQ 1>
       <cftransaction>
         <cfquery datasource="hermes">
-          DELETE FROM app_passwords
-          WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
-        </cfquery>
-        <cfquery datasource="hermes">
           DELETE FROM transactional_smtp_credentials
           WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
             AND LEFT(username, 5) = 'smtp_'
         </cfquery>
+        <cfquery name="getRemainingTransactionalUsername" datasource="hermes">
+          SELECT COUNT(*) AS row_count
+          FROM transactional_smtp_credentials
+          WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
+        </cfquery>
+        <cfif Val(getRemainingTransactionalUsername.row_count) EQ 0>
+          <cfquery datasource="hermes">
+            DELETE FROM app_passwords
+            WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
+          </cfquery>
+        </cfif>
       </cftransaction>
         <cfset session.m = 6>
       </cfif>

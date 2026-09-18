@@ -143,6 +143,10 @@ test_root_socket_auth() {
 # '%' and reject credentials that otherwise validate.
 normalize_user_hosts() {
     local user="$1"
+    if [[ "$user" == "root" ]]; then
+        log_error "Refusing host cleanup for protected MariaDB account: root"
+        return 1
+    fi
     local user_esc host host_esc host_rows
     user_esc="$(sql_escape "$user")"
     local host_query

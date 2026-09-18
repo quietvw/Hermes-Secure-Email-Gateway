@@ -3074,6 +3074,9 @@ create_databases() {
         local user="$2"
         local pass="$3"
         local collation="${4:-utf8mb4_unicode_ci}"
+        if [[ "$user" == "root" ]]; then
+            error "Refusing stale-host cleanup for protected MariaDB account 'root'"
+        fi
         local user_esc
         local pass_esc
         local host host_esc host_rows
