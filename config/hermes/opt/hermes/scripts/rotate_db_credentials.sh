@@ -150,7 +150,7 @@ normalize_user_hosts() {
     local user_esc host host_esc host_rows
     user_esc="$(sql_escape "$user")"
     local host_query
-    host_query="$(hermes_stale_host_query "$user_esc")"
+    host_query="$(hermes_non_wildcard_host_query "$user_esc")"
     if ! host_rows="$(
         docker exec hermes_db_server mysql -N -B -u root -e "$host_query"
     )"; then

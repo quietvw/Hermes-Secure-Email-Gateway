@@ -283,6 +283,11 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
+    <cfif REFind("^/[A-Za-z0-9._/-]+$", dockerBinary) EQ 0>
+      <cfset session.smtpCredentialErrorDetail = "Docker CLI path validation failed.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
 <cfset _transLength = 24>
 <cfinclude template="./inc/generate_customtrans.cfm">
 <cfif NOT DirectoryExists("/opt/hermes/tmp")>
