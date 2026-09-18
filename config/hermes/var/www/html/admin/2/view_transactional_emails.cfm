@@ -328,28 +328,20 @@ queryExecute(
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfif>
 <cfset smtpHashInputFile = smtpHashTempDir & "/password.b64">
-<cfset smtpHashScriptFile = smtpHashTempDir & "/generate_hash.sh">
 <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashInputFile) EQ 0>
   <cfset session.smtpCredentialErrorDetail = "Temporary hash file path validation failed.">
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfif>
-<cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashScriptFile) EQ 0>
-  <cfset session.smtpCredentialErrorDetail = "Temporary hash script path validation failed.">
-  <cfset session.m = 30>
-  <cflocation url="view_transactional_emails.cfm" addtoken="no">
-</cfif>
 <cftry>
     <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
-    <cfset smtpHashScript = "#!/bin/sh#Chr(10)#set -eu#Chr(10)#docker_bin='#dockerBinary#'#Chr(10)#input_file='#smtpHashInputFile#'#Chr(10)#\"$docker_bin\" exec -i hermes_dovecot sh -c 'tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap '\\''rm -f \"$tmp2\"'\\'' EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"' < \"$input_file\"#Chr(10)#">
-    <cffile action="write" file="#smtpHashScriptFile#" output="#smtpHashScript#" charset="utf-8" mode="700">
     <!--
       Keep plaintext off process arguments. Pass Base64 data into the
       container, decode there, and feed doveadm via stdin.
     -->
     <cfexecute
       name="/bin/sh"
-      arguments='#smtpHashScriptFile#'
+      arguments='-c "#dockerBinary# exec -i hermes_dovecot sh -c ''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"'' < #smtpHashInputFile#"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
@@ -420,14 +412,6 @@ queryExecute(
       <cffile action="delete" file="#smtpHashInputFile#">
     <cfcatch type="any">
       <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp hash file #smtpHashInputFile#: #cfcatch.message# #cfcatch.detail#">
-    </cfcatch>
-    </cftry>
-  </cfif>
-  <cfif IsDefined("smtpHashScriptFile") AND smtpHashScriptFile NEQ "" AND FileExists(smtpHashScriptFile)>
-    <cftry>
-      <cffile action="delete" file="#smtpHashScriptFile#">
-    <cfcatch type="any">
-      <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp hash script #smtpHashScriptFile#: #cfcatch.message# #cfcatch.detail#">
     </cfcatch>
     </cftry>
   </cfif>
@@ -509,6 +493,7 @@ queryExecute(
           WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
             AND username = <cfqueryparam value="#deleteSmtpUsername#" cfsqltype="cf_sql_varchar">
             AND LEFT(username, 5) = 'smtp_'
+            AND active = 0
         </cfquery>
       </cftransaction>
       <cfset deleteSmtpRowsAffected = 0>
@@ -702,13 +687,14 @@ queryExecute(
                 <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
                 <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
               </form>
-              </cfif>
+              <cfelse>
               <form method="post" action="view_transactional_emails.cfm" style="display:inline;">
                 <input type="hidden" name="action" value="delete_smtp_credential"><input type="hidden" name="id" value="#encodeForHTMLAttribute(id)#">
                 <input type="hidden" name="smtp_username" value="#encodeForHTMLAttribute(username)#">
                 <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
                 <button type="submit" class="btn btn-sm btn-danger ms-1" onclick="return confirm('Delete this SMTP credential permanently?');">Delete</button>
               </form>
+              </cfif>
             </td>
           </tr>
         </cfoutput>
