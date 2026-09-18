@@ -334,8 +334,8 @@ queryExecute(
       container, decode there, and feed doveadm via stdin.
     -->
     <cfexecute
-      name="/bin/sh"
-      arguments='"#smtpHashScriptFile#" "#dockerBinary#" "#smtpHashInputFile#"'
+      name="#smtpHashScriptFile#"
+      arguments='#dockerBinary# #smtpHashInputFile#'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
@@ -469,12 +469,19 @@ queryExecute(
   </cfif>
   <cfif form.action EQ "delete_smtp_credential">
     <cfparam name="form.id" default="">
+    <cfparam name="form.smtp_username" default="">
+    <cfset deleteSmtpUsername = LCase(Trim(form.smtp_username))>
     <cfif IsNumeric(form.id)>
+      <cfif REFind("^smtp_[a-z0-9]{16}$", deleteSmtpUsername) EQ 0>
+        <cfset session.m = 30>
+        <cfset session.smtpCredentialErrorDetail = "Invalid SMTP credential identifier for delete request.">
+        <cflocation url="view_transactional_emails.cfm" addtoken="no">
+      </cfif>
       <cfquery name="getDeleteSmtpCred" datasource="hermes">
         SELECT username
         FROM transactional_smtp_credentials
         WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
-          AND LEFT(username, 5) = 'smtp_'
+          AND username = <cfqueryparam value="#deleteSmtpUsername#" cfsqltype="cf_sql_varchar">
         LIMIT 1
       </cfquery>
       <cfif getDeleteSmtpCred.recordcount EQ 1>
@@ -482,7 +489,7 @@ queryExecute(
         <cfquery datasource="hermes">
           DELETE FROM transactional_smtp_credentials
           WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
-            AND LEFT(username, 5) = 'smtp_'
+            AND username = <cfqueryparam value="#deleteSmtpUsername#" cfsqltype="cf_sql_varchar">
         </cfquery>
       </cftransaction>
         <cfset session.m = 6>
@@ -668,6 +675,7 @@ queryExecute(
               </form>
               <form method="post" action="view_transactional_emails.cfm" style="display:inline;">
                 <input type="hidden" name="action" value="delete_smtp_credential"><input type="hidden" name="id" value="#id#">
+                <input type="hidden" name="smtp_username" value="#encodeForHTMLAttribute(username)#">
                 <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
                 <button type="submit" class="btn btn-sm btn-danger ms-1" onclick="return confirm('Delete this SMTP credential permanently?');">Delete</button>
               </form>
