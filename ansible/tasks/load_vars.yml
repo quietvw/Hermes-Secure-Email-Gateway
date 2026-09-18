@@ -1,0 +1,14 @@
+---
+- name: Check for generated Hermes vars file
+  ansible.builtin.stat:
+    path: "{{ hermes_repo_root }}/ansible/vars/hermes.yml"
+  register: hermes_generated_vars
+
+- name: Load generated Hermes vars file
+  ansible.builtin.include_vars:
+    file: "{{ hermes_repo_root }}/ansible/vars/hermes.yml"
+  when: hermes_generated_vars.stat.exists
+
+- name: Set effective Hermes root
+  ansible.builtin.set_fact:
+    hermes_root_effective: "{{ hermes_root | default(hermes_repo_root) }}"

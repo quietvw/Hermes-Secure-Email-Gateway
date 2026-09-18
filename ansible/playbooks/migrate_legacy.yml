@@ -1,0 +1,30 @@
+---
+- name: Migrate legacy Hermes backup into Docker install
+  hosts: hermes_hosts
+  become: true
+  gather_facts: false
+  vars:
+    hermes_repo_root: "{{ playbook_dir | dirname | dirname }}"
+  pre_tasks:
+    - name: Load generated Hermes vars
+      ansible.builtin.import_tasks: "{{ hermes_repo_root }}/ansible/tasks/load_vars.yml"
+
+    - name: Validate migration arguments
+      ansible.builtin.assert:
+        that:
+          - (legacy_backup_file | default('')) | length > 0 or (legacy_archive_file | default('')) | length > 0
+          - legacy_mode | default('') in ['', 'system', 'archive', 'all']
+        fail_msg: "Set legacy_backup_file and/or legacy_archive_file; optional legacy_mode must be system/archive/all."
+
+  tasks:
+    - name: Run legacy migration script
+      ansible.builtin.command:
+        argv: "{{ ['bash', hermes_root_effective + '/scripts/migrate_legacy_to_docker.sh'] + (['--mode', legacy_mode] if (legacy_mode | default('') | length > 0) else []) + (['-B', legacy_backup_file] if (legacy_backup_file | default('') | length > 0) else []) + (['--archive', legacy_archive_file] if (legacy_archive_file | default('') | length > 0) else []) + ['-D', hermes_root_effective] + (['-M', legacy_data_mount] if (legacy_data_mount | default('') | length > 0) else []) + (['-A', legacy_archive_mount] if (legacy_archive_mount | default('') | length > 0) else []) + (['-V', legacy_vmail_mount] if (legacy_vmail_mount | default('') | length > 0) else []) }}"
+      args:
+        chdir: "{{ hermes_root_effective }}"
+      register: hermes_migrate
+      changed_when: true
+
+    - name: Show migration output
+      ansible.builtin.debug:
+        var: hermes_migrate.stdout_lines

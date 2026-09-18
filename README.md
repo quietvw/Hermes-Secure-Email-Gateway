@@ -286,6 +286,26 @@ sudo ./scripts/install_hermes_docker.sh
 
 The installer runs the full install in a single session and takes 10 to 30 minutes on a fresh host (mostly image downloads and fail2ban container build).
 
+### Optional: drive the installer via Ansible
+
+Hermes now also ships a small Ansible wrapper layer around the existing installer
+and maintenance scripts. Generate the local Ansible config, review the produced
+values, then run the playbook entrypoint:
+
+```bash
+./hermes_exec configure
+./hermes_exec install
+```
+
+`./hermes_exec configure` writes two local files that are intentionally gitignored:
+
+- `ansible/inventory/hosts.yml`
+- `ansible/vars/hermes.yml`
+
+The install playbook seeds the installer's existing state/config files, then runs
+`scripts/install_hermes_docker.sh` so the Ansible path stays aligned with the
+canonical installer logic.
+
 The installer will:
 
 1. Display the Pro EULA and ask for acceptance (Community Edition users can accept; the EULA only takes effect if a Pro license is later activated).
@@ -369,6 +389,24 @@ The install script also provides a set of recovery and maintenance flags:
 | `sudo ./scripts/install_hermes_docker.sh --wipe` | **Destructive.** Tear down everything (containers, volumes, credentials, install state) for a fresh start. Requires double confirmation. |
 
 Run any of the above with `--help` for full usage. The installer is **idempotent**: re-running it (or any of its sub-steps) on an already-installed system skips already-completed work via state guards.
+
+### Ansible wrapper commands
+
+The root `./hermes_exec` helper can run the main install and recovery workflows
+through playbooks that call the existing scripts:
+
+| Command | Purpose |
+|---|---|
+| `./hermes_exec generate-config` | Create default local Ansible inventory and vars files |
+| `./hermes_exec configure` | Prompt for host/install values and write the local Ansible config |
+| `./hermes_exec install` | Run `ansible/playbooks/install.yml` |
+| `./hermes_exec system-test` | Run `ansible/playbooks/system_test.yml` / `scripts/hermes_smoke_test.sh` |
+| `./hermes_exec backup --path <dir> --scope <scope>` | Run `ansible/playbooks/backup.yml` |
+| `./hermes_exec restore --backup-dir <dir>` | Run `ansible/playbooks/restore.yml` |
+| `./hermes_exec migrate --backup-file <file>` | Run `ansible/playbooks/migrate_legacy.yml` |
+
+If you need lower-level control, pass normal `ansible-playbook` arguments after
+`--`, or invoke the playbooks in `ansible/playbooks/` directly.
 
 ## Documentation
 

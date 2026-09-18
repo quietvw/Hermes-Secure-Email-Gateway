@@ -1,0 +1,286 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ANSIBLE_DIR="${SCRIPT_DIR}/ansible"
+INVENTORY_FILE="${ANSIBLE_DIR}/inventory/hosts.yml"
+INVENTORY_EXAMPLE="${INVENTORY_FILE}.example"
+VARS_FILE="${ANSIBLE_DIR}/vars/hermes.yml"
+PLAYBOOK_DIR="${ANSIBLE_DIR}/playbooks"
+
+usage() {
+    cat <<EOF
+Usage: ./hermes_exec <command> [options] [-- ansible args]
+
+Commands:
+  configure              Interactively generate ansible/inventory/hosts.yml and ansible/vars/hermes.yml
+  generate-config        Create default ansible config files if they do not exist
+  install                Run ansible/playbooks/install.yml
+  system-test            Run ansible/playbooks/system_test.yml
+  backup                 Run ansible/playbooks/backup.yml
+  restore                Run ansible/playbooks/restore.yml
+  migrate                Run ansible/playbooks/migrate_legacy.yml
+  help                   Show this help
+
+Examples:
+  ./hermes_exec configure
+  ./hermes_exec install
+  ./hermes_exec backup --path /mnt/backups --scope system --yes
+  ./hermes_exec restore --backup-dir /mnt/backups/hermes-backup-system-v260917-20260918T000000Z --yes
+  ./hermes_exec migrate --backup-file /mnt/legacy/hermes-system-240815-09-17-2026-2300.tar.gz
+EOF
+}
+
+require_ansible() {
+    if ! command -v ansible-playbook >/dev/null 2>&1; then
+        echo "ERROR: ansible-playbook was not found in PATH." >&2
+        exit 1
+    fi
+}
+
+ensure_generated_files() {
+    mkdir -p "${ANSIBLE_DIR}/inventory" "${ANSIBLE_DIR}/vars"
+    [[ -f "${INVENTORY_FILE}" ]] || cp "${INVENTORY_EXAMPLE}" "${INVENTORY_FILE}"
+}
+
+derive_default_domain() {
+    local hostname="$1"
+    if [[ "$hostname" == *.* ]]; then
+        echo "${hostname#*.}"
+    else
+        echo "example.com"
+    fi
+}
+
+generate_config() {
+    ensure_generated_files
+    if [[ ! -f "${VARS_FILE}" ]]; then
+        python3 - <<'PY' "${VARS_FILE}" "${SCRIPT_DIR}"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+repo_root = sys.argv[2]
+path.write_text(
+    "\n".join(
+        [
+            "---",
+            f"hermes_root: {repo_root}",
+            "hermes_host_ip: 192.0.2.10",
+            "hermes_mail_hostname: smtp.example.com",
+            "hermes_mail_domain: example.com",
+            "hermes_dns_forwarders:",
+            "  - 1.1.1.1",
+            "  - 8.8.8.8",
+            "",
+            "hermes_data_mount: /mnt/data",
+            "hermes_archive_mount: /mnt/archive",
+            "hermes_vmail_mount: /mnt/vmail",
+            "hermes_files_mount: /mnt/files",
+            "hermes_enable_nextcloud: false",
+            "hermes_eula_accepted: false",
+            "",
+        ]
+    ),
+    encoding="utf-8",
+)
+PY
+    fi
+    echo "Generated:"
+    echo "  ${INVENTORY_FILE}"
+    echo "  ${VARS_FILE}"
+}
+
+configure() {
+    ensure_generated_files
+
+    local target_host hermes_root host_ip mail_hostname mail_domain dns_forwarders
+    local data_mount archive_mount vmail_mount files_mount nextcloud_enabled eula_accepted
+
+    read -r -p "Target host [localhost]: " target_host
+    target_host="${target_host:-localhost}"
+
+    read -r -p "Hermes repository root [${SCRIPT_DIR}]: " hermes_root
+    hermes_root="${hermes_root:-${SCRIPT_DIR}}"
+
+    read -r -p "Host IP [192.0.2.10]: " host_ip
+    host_ip="${host_ip:-192.0.2.10}"
+
+    read -r -p "Mail hostname [smtp.example.com]: " mail_hostname
+    mail_hostname="${mail_hostname:-smtp.example.com}"
+
+    read -r -p "Mail domain [$(derive_default_domain "${mail_hostname}")]: " mail_domain
+    mail_domain="${mail_domain:-$(derive_default_domain "${mail_hostname}")}"
+
+    read -r -p "DNS forwarders (comma separated) [1.1.1.1,8.8.8.8]: " dns_forwarders
+    dns_forwarders="${dns_forwarders:-1.1.1.1,8.8.8.8}"
+
+    read -r -p "Data mount [/mnt/data]: " data_mount
+    data_mount="${data_mount:-/mnt/data}"
+
+    read -r -p "Archive mount [/mnt/archive]: " archive_mount
+    archive_mount="${archive_mount:-/mnt/archive}"
+
+    read -r -p "Vmail mount [/mnt/vmail]: " vmail_mount
+    vmail_mount="${vmail_mount:-/mnt/vmail}"
+
+    read -r -p "Nextcloud files mount [/mnt/files]: " files_mount
+    files_mount="${files_mount:-/mnt/files}"
+
+    read -r -p "Enable Nextcloud [false]: " nextcloud_enabled
+    nextcloud_enabled="${nextcloud_enabled:-false}"
+
+    read -r -p "Pre-accept the Hermes EULA for Ansible install runs [false]: " eula_accepted
+    eula_accepted="${eula_accepted:-false}"
+
+    cat > "${INVENTORY_FILE}" <<EOF
+all:
+  children:
+    hermes_hosts:
+      hosts:
+        ${target_host}:
+$( [[ "${target_host}" == "localhost" ]] && printf '          ansible_connection: local\n' )
+EOF
+
+    python3 - <<'PY' "${VARS_FILE}" "${hermes_root}" "${host_ip}" "${mail_hostname}" "${mail_domain}" "${dns_forwarders}" "${data_mount}" "${archive_mount}" "${vmail_mount}" "${files_mount}" "${nextcloud_enabled}" "${eula_accepted}"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+hermes_root, host_ip, mail_hostname, mail_domain, dns_forwarders, data_mount, archive_mount, vmail_mount, files_mount, nextcloud_enabled, eula_accepted = sys.argv[2:]
+forwarders = [item.strip() for item in dns_forwarders.split(",") if item.strip()]
+
+def as_bool(value: str) -> str:
+    return "true" if value.strip().lower() in {"1", "true", "yes", "y"} else "false"
+
+lines = [
+    "---",
+    f"hermes_root: {hermes_root}",
+    f"hermes_host_ip: {host_ip}",
+    f"hermes_mail_hostname: {mail_hostname}",
+    f"hermes_mail_domain: {mail_domain}",
+    "hermes_dns_forwarders:",
+]
+lines.extend([f"  - {item}" for item in forwarders] or ["  - 1.1.1.1"])
+lines.extend(
+    [
+        "",
+        f"hermes_data_mount: {data_mount}",
+        f"hermes_archive_mount: {archive_mount}",
+        f"hermes_vmail_mount: {vmail_mount}",
+        f"hermes_files_mount: {files_mount}",
+        f"hermes_enable_nextcloud: {as_bool(nextcloud_enabled)}",
+        f"hermes_eula_accepted: {as_bool(eula_accepted)}",
+        "",
+    ]
+)
+path.write_text("\n".join(lines), encoding="utf-8")
+PY
+
+    echo "Wrote ${INVENTORY_FILE}"
+    echo "Wrote ${VARS_FILE}"
+}
+
+run_playbook() {
+    local playbook="$1"
+    shift
+    require_ansible
+    ANSIBLE_CONFIG="${SCRIPT_DIR}/ansible.cfg" ansible-playbook "${PLAYBOOK_DIR}/${playbook}" "$@"
+}
+
+command_install() {
+    run_playbook "install.yml" "$@"
+}
+
+command_system_test() {
+    run_playbook "system_test.yml" "$@"
+}
+
+command_backup() {
+    local args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --path) args+=("-e" "backup_path=$2"); shift 2 ;;
+            --scope) args+=("-e" "backup_scope=$2"); shift 2 ;;
+            --cold) args+=("-e" "backup_cold=true"); shift ;;
+            --no-nc-maintenance) args+=("-e" "backup_no_nc_maintenance=true"); shift ;;
+            --yes) args+=("-e" "hermes_yes=true"); shift ;;
+            --dry-run) args+=("-e" "hermes_dry_run=true"); shift ;;
+            --) shift; args+=("$@"); break ;;
+            *) args+=("$1"); shift ;;
+        esac
+    done
+    run_playbook "backup.yml" "${args[@]}"
+}
+
+command_restore() {
+    local args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --backup-dir) args+=("-e" "backup_dir=$2"); shift 2 ;;
+            --only) args+=("-e" "restore_only=$2"); shift 2 ;;
+            --yes) args+=("-e" "hermes_yes=true"); shift ;;
+            --dry-run) args+=("-e" "hermes_dry_run=true"); shift ;;
+            --) shift; args+=("$@"); break ;;
+            *) args+=("$1"); shift ;;
+        esac
+    done
+    run_playbook "restore.yml" "${args[@]}"
+}
+
+command_migrate() {
+    local args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --mode) args+=("-e" "legacy_mode=$2"); shift 2 ;;
+            --backup-file) args+=("-e" "legacy_backup_file=$2"); shift 2 ;;
+            --archive-file) args+=("-e" "legacy_archive_file=$2"); shift 2 ;;
+            --data-mount) args+=("-e" "legacy_data_mount=$2"); shift 2 ;;
+            --archive-mount) args+=("-e" "legacy_archive_mount=$2"); shift 2 ;;
+            --vmail-mount) args+=("-e" "legacy_vmail_mount=$2"); shift 2 ;;
+            --) shift; args+=("$@"); break ;;
+            *) args+=("$1"); shift ;;
+        esac
+    done
+    run_playbook "migrate_legacy.yml" "${args[@]}"
+}
+
+case "${1:-help}" in
+    configure)
+        shift
+        configure "$@"
+        ;;
+    generate-config)
+        shift
+        generate_config "$@"
+        ;;
+    install)
+        shift
+        command_install "$@"
+        ;;
+    system-test)
+        shift
+        command_system_test "$@"
+        ;;
+    backup)
+        shift
+        command_backup "$@"
+        ;;
+    restore)
+        shift
+        command_restore "$@"
+        ;;
+    migrate)
+        shift
+        command_migrate "$@"
+        ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        echo "Unknown command: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+esac

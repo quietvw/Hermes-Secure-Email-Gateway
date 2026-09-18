@@ -1,0 +1,17 @@
+---
+# Copy to ansible/vars/hermes.yml with ./hermes_exec configure
+
+hermes_root: /absolute/path/to/Hermes-Secure-Email-Gateway
+hermes_host_ip: 192.0.2.10
+hermes_mail_hostname: smtp.example.com
+hermes_mail_domain: example.com
+hermes_dns_forwarders:
+  - 1.1.1.1
+  - 8.8.8.8
+
+hermes_data_mount: /mnt/data
+hermes_archive_mount: /mnt/archive
+hermes_vmail_mount: /mnt/vmail
+hermes_files_mount: /mnt/files
+hermes_enable_nextcloud: false
+hermes_eula_accepted: false

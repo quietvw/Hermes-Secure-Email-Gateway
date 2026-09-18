@@ -1,0 +1,6 @@
+all:
+  children:
+    hermes_hosts:
+      hosts:
+        localhost:
+          ansible_connection: local

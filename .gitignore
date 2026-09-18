@@ -187,6 +187,10 @@ config/hermes/opt/hermes/tmp/*
 # Install log files (written by install_hermes_docker.sh)
 install-logs/
 
+# Generated local Ansible operator config
+ansible/inventory/hosts.yml
+ansible/vars/hermes.yml
+
 # Postfix/Nginx config files with environment-specific data.
 #
 # Three classes of postfix files are gitignored:

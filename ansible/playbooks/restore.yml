@@ -1,0 +1,32 @@
+---
+- name: Run Hermes restore
+  hosts: hermes_hosts
+  become: true
+  gather_facts: false
+  vars:
+    hermes_repo_root: "{{ playbook_dir | dirname | dirname }}"
+  pre_tasks:
+    - name: Load generated Hermes vars
+      ansible.builtin.import_tasks: "{{ hermes_repo_root }}/ansible/tasks/load_vars.yml"
+
+    - name: Validate restore arguments
+      ansible.builtin.assert:
+        that:
+          - (backup_dir | default('')) | length > 0
+          - restore_only | default('') in ['', 'system', 'archive', 'vmail', 'nextcloud', 'all']
+        fail_msg: "Set backup_dir, and use restore_only only for system/archive/vmail/nextcloud/all."
+
+  tasks:
+    - name: Run restore script
+      ansible.builtin.command:
+        argv: "{{ ['bash', hermes_root_effective + '/scripts/system_restore.sh', '-F', backup_dir] + (['--only=' + restore_only] if (restore_only | default('') | length > 0) else []) + (['--yes'] if (hermes_yes | default(false) | bool) else []) + (['--dry-run'] if (hermes_dry_run | default(false) | bool) else []) }}"
+      args:
+        chdir: "{{ hermes_root_effective }}"
+      environment:
+        HERMES_ROOT: "{{ hermes_root_effective }}"
+      register: hermes_restore
+      changed_when: not (hermes_dry_run | default(false) | bool)
+
+    - name: Show restore output
+      ansible.builtin.debug:
+        var: hermes_restore.stdout_lines
