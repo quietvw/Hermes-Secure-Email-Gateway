@@ -77,7 +77,6 @@
         state: touch
         mode: "0644"
       loop:
-        - "00-eula-accepted"
         - "02-mounts-configured"
         - "03-host-ip-confirmed"
         - "03b-dns-forwarders-configured"
@@ -87,7 +86,11 @@
 
     - name: Run installer
       ansible.builtin.shell: |
-        printf 'y\n' | bash "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
+        if [[ -f "{{ hermes_root_effective }}/.install-state/00-eula-accepted.done" ]]; then
+          printf 'y\n' | bash "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
+        else
+          printf '1\ny\n' | bash "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
+        fi
       args:
         chdir: "{{ hermes_root_effective }}"
         executable: /bin/bash
