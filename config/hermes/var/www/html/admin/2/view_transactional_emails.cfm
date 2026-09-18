@@ -244,15 +244,36 @@ queryExecute(
       </cfif>
     </cfif>
 
-    <cfset _transLength = 16>
-    <cfinclude template="./inc/generate_customtrans.cfm">
-    <cfset smtpUsername = "smtp_" & customtrans3>
-    <cfset _transLength = 32>
-    <cfinclude template="./inc/generate_customtrans.cfm">
-    <cfset smtpPasswordPlain = customtrans3>
+    <cfset smtpUsername = "">
+    <cfset smtpPasswordPlain = "">
+    <cfset _smtpCredentialGenAttempts = 0>
+    <cfloop condition="_smtpCredentialGenAttempts LT 5 AND (REFind('^smtp_[a-z0-9]{16}$', smtpUsername) EQ 0 OR REFind('^[a-z0-9]{32}$', smtpPasswordPlain) EQ 0)">
+      <cfset _smtpCredentialGenAttempts = _smtpCredentialGenAttempts + 1>
+      <cfset _transLength = 16>
+      <cfinclude template="./inc/generate_customtrans.cfm">
+      <cfset smtpUsername = "smtp_" & customtrans3>
+      <cfset _transLength = 32>
+      <cfinclude template="./inc/generate_customtrans.cfm">
+      <cfset smtpPasswordPlain = customtrans3>
+    </cfloop>
     <cfset session.smtpCredentialErrorDetail = "">
+    <cfif REFind("^smtp_[a-z0-9]{16}$", smtpUsername) EQ 0 OR REFind("^[a-z0-9]{32}$", smtpPasswordPlain) EQ 0>
+      <cfset session.smtpCredentialErrorDetail = "Could not generate a valid SMTP credential value. Please retry.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
     <cfif REFind("[\r\n]", smtpPasswordPlain) GT 0>
       <cfset session.smtpCredentialErrorDetail = "Generated password contained unsupported line breaks.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
+    <cfset dockerBinary = "">
+    <cfif FileExists("/usr/local/bin/docker")>
+      <cfset dockerBinary = "/usr/local/bin/docker">
+    <cfelseif FileExists("/usr/bin/docker")>
+      <cfset dockerBinary = "/usr/bin/docker">
+    <cfelse>
+      <cfset session.smtpCredentialErrorDetail = "Docker CLI not found in commandbox container. Unable to generate SMTP credential hash.">
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
@@ -262,7 +283,7 @@ queryExecute(
       Password content is generated internally by Hermes and validated above.
     -->
     <cfexecute
-      name="/usr/local/bin/docker"
+      name="#dockerBinary#"
       arguments='exec hermes_dovecot doveadm pw -s ARGON2ID -p #smtpPasswordPlain#'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
@@ -363,6 +384,17 @@ queryExecute(
     </cfif>
     <cflocation url="view_transactional_emails.cfm" addtoken="no">
   </cfif>
+  <cfif form.action EQ "delete_smtp_credential">
+    <cfparam name="form.id" default="">
+    <cfif IsNumeric(form.id)>
+      <cfquery datasource="hermes">
+        DELETE FROM transactional_smtp_credentials
+        WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
+      </cfquery>
+      <cfset session.m = 6>
+    </cfif>
+    <cflocation url="view_transactional_emails.cfm" addtoken="no">
+  </cfif>
 </cfif>
 
 <cfquery name="getTxnSettings" datasource="hermes">
@@ -414,6 +446,7 @@ queryExecute(
 <cfif m EQ 3><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>API token revoked.</div></cfif>
 <cfif m EQ 4><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>SMTP credential generated.</div></cfif>
 <cfif m EQ 5><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>SMTP credential revoked.</div></cfif>
+<cfif m EQ 6><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>SMTP credential deleted.</div></cfif>
 <cfif m EQ 11><div class="alert alert-danger"><h5><i class="icon fas fa-ban"></i> Error</h5>API token name is required.</div></cfif>
 <cfif m EQ 12><div class="alert alert-danger"><h5><i class="icon fas fa-ban"></i> Error</h5>SMTP credential name is required.</div></cfif>
 <cfif m EQ 13><div class="alert alert-danger"><h5><i class="icon fas fa-ban"></i> Error</h5>API allowed sender must be a valid email address.</div></cfif>
@@ -539,6 +572,11 @@ queryExecute(
                 <input type="hidden" name="action" value="revoke_smtp_credential"><input type="hidden" name="id" value="#id#">
                 <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
                 <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+              </form>
+              <form method="post" action="view_transactional_emails.cfm" style="display:inline;">
+                <input type="hidden" name="action" value="delete_smtp_credential"><input type="hidden" name="id" value="#id#">
+                <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
+                <button type="submit" class="btn btn-sm btn-danger ms-1" onclick="return confirm('Delete this SMTP credential permanently?');">Delete</button>
               </form>
               </cfif>
             </td>
