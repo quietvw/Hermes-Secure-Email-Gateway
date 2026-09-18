@@ -319,9 +319,6 @@ queryExecute(
     <cfdirectory action="create" directory="#smtpHashTempDirCandidate#" mode="700">
     <cfset smtpHashTempDir = smtpHashTempDirCandidate>
   <cfcatch type="any">
-    <cfif DirectoryExists(smtpHashTempDirCandidate)>
-      <cfset smtpHashTempDir = smtpHashTempDirCandidate>
-    </cfif>
   </cfcatch>
   </cftry>
 </cfloop>
