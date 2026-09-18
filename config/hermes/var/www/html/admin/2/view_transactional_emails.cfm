@@ -397,7 +397,7 @@ queryExecute(
   </cfif>
   <cfif IsDefined("smtpHashTempDir") AND smtpHashTempDir NEQ "" AND DirectoryExists(smtpHashTempDir)>
     <cftry>
-      <cfdirectory action="delete" directory="#smtpHashTempDir#" recurse="true">
+      <cfdirectory action="delete" directory="#smtpHashTempDir#">
     <cfcatch type="any">
       <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp directory #smtpHashTempDir#: #cfcatch.message# #cfcatch.detail#">
     </cfcatch>
