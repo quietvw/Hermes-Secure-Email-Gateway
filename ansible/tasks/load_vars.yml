@@ -1,4 +1,8 @@
 ---
+- name: Load example Hermes vars file
+  ansible.builtin.include_vars:
+    file: "{{ hermes_repo_root }}/ansible/vars/hermes.yml.example"
+
 - name: Check for generated Hermes vars file
   ansible.builtin.stat:
     path: "{{ hermes_repo_root }}/ansible/vars/hermes.yml"

@@ -5,12 +5,15 @@
   gather_facts: false
   vars:
     hermes_repo_root: "{{ playbook_dir | dirname | dirname }}"
-    hermes_console_host_effective: "{{ hermes_console_host | default(hermes_host_ip | default('')) }}"
-    hermes_dns_forwarders_csv: >-
-      {{ hermes_dns_forwarders if hermes_dns_forwarders is string else (hermes_dns_forwarders | default([]) | join(',')) }}
   pre_tasks:
     - name: Load generated Hermes vars
       ansible.builtin.import_tasks: "{{ hermes_repo_root }}/ansible/tasks/load_vars.yml"
+
+    - name: Derive effective install values
+      ansible.builtin.set_fact:
+        hermes_console_host_effective: "{{ hermes_console_host | default(hermes_host_ip | default('')) }}"
+        hermes_dns_forwarders_csv: >-
+          {{ hermes_dns_forwarders if hermes_dns_forwarders is string else (hermes_dns_forwarders | default([]) | join(',')) }}
 
     - name: Validate install variables
       ansible.builtin.assert:
