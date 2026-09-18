@@ -3097,7 +3097,7 @@ create_databases() {
         fi
 
         local host_query
-        host_query="$(hermes_non_wildcard_host_query "$user_esc")"
+        host_query="$(hermes_non_wildcard_host_query "$user")"
         if ! host_rows="$(
             docker exec hermes_db_server mysql -N -B -u root -e "$host_query" 2>> "$LOG_FILE"
         )"; then
