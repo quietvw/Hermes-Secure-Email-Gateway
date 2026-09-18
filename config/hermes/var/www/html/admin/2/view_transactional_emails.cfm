@@ -283,14 +283,18 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
+<cfset _transLength = 24>
+<cfinclude template="./inc/generate_customtrans.cfm">
+<cfset smtpHashInputFile = "/opt/hermes/tmp/tx_smtp_b64_" & customtrans3 & ".txt">
 <cftry>
+    <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8">
     <!--
       Keep plaintext off process arguments. Pass Base64 data into the
       container, decode there, and feed doveadm via stdin.
     -->
     <cfexecute
       name="/bin/sh"
-      arguments='-c "printf %s \"#smtpPasswordBase64#\" | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp\\\"\" EXIT; base64 -d > \"$tmp\" && { cat \"$tmp\"; printf \"\n\"; cat \"$tmp\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
+      arguments='-c "chmod 600 #smtpHashInputFile# && cat #smtpHashInputFile# | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && { cat \"$tmp2\"; printf \"\n\"; cat \"$tmp2\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
@@ -355,6 +359,11 @@ queryExecute(
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 
 </cfcatch>
+<cffinally>
+  <cfif smtpHashInputFile NEQ "" AND FileExists(smtpHashInputFile)>
+    <cffile action="delete" file="#smtpHashInputFile#">
+  </cfif>
+</cffinally>
 </cftry>
 
     <cfquery datasource="hermes">
@@ -385,6 +394,7 @@ queryExecute(
         UPDATE transactional_smtp_credentials
         SET active = 0, revoked_at = NOW()
         WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
+          AND LEFT(username, 5) = 'smtp_'
       </cfquery>
       <cfset session.m = 5>
     </cfif>
@@ -396,6 +406,7 @@ queryExecute(
       <cfquery datasource="hermes">
         DELETE FROM transactional_smtp_credentials
         WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
+          AND LEFT(username, 5) = 'smtp_'
       </cfquery>
       <cfset session.m = 6>
     </cfif>
