@@ -5,6 +5,7 @@
   gather_facts: false
   vars:
     hermes_repo_root: "{{ playbook_dir | dirname | dirname }}"
+    hermes_required_script: "install_hermes_docker.sh"
     hermes_installer_state_values:
       - name: "03-host-ip-confirmed"
         value: "{{ hermes_host_ip }}"
@@ -83,6 +84,7 @@
         state: touch
         mode: "0644"
       loop:
+        - "00-eula-accepted"
         - "02-mounts-configured"
         - "03-host-ip-confirmed"
         - "03b-dns-forwarders-configured"
@@ -90,26 +92,7 @@
         - "04-mail-domain-confirmed"
         - "05-console-host-confirmed"
 
-    - name: Check whether installer EULA was already accepted on target
-      ansible.builtin.stat:
-        path: "{{ hermes_root_effective }}/.install-state/00-eula-accepted.done"
-      register: hermes_eula_state
-
-    - name: Run installer on first Ansible-driven execution
-      ansible.builtin.shell: |
-        set -o pipefail
-        printf '1\ny\n' | bash "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
-      args:
-        chdir: "{{ hermes_root_effective }}"
-        executable: /bin/bash
-      environment:
-        HERMES_ROOT: "{{ hermes_root_effective }}"
-        TERM: xterm
-      register: hermes_install_first_run
-      when: not hermes_eula_state.stat.exists
-      changed_when: true
-
-    - name: Run installer after EULA was already accepted
+    - name: Run installer
       ansible.builtin.shell: |
         set -o pipefail
         printf 'y\n' | bash "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
@@ -119,13 +102,8 @@
       environment:
         HERMES_ROOT: "{{ hermes_root_effective }}"
         TERM: xterm
-      register: hermes_install_rerun
-      when: hermes_eula_state.stat.exists
+      register: hermes_install
       changed_when: true
-
-    - name: Select installer output
-      ansible.builtin.set_fact:
-        hermes_install: "{{ hermes_install_rerun if hermes_eula_state.stat.exists else hermes_install_first_run }}"
 
     - name: Show installer output
       ansible.builtin.debug:

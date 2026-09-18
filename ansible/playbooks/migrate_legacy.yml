@@ -5,6 +5,7 @@
   gather_facts: false
   vars:
     hermes_repo_root: "{{ playbook_dir | dirname | dirname }}"
+    hermes_required_script: "migrate_legacy_to_docker.sh"
   pre_tasks:
     - name: Load generated Hermes vars
       ansible.builtin.import_tasks: "{{ hermes_repo_root }}/ansible/tasks/load_vars.yml"

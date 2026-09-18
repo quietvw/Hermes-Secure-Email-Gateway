@@ -412,7 +412,8 @@ use expects `ansible/inventory/hosts.yml` to exist (generate it with
 load `ansible/vars/hermes.yml.example` by default and let a local
 `ansible/vars/hermes.yml` override it when present. For remote inventories, set
 `hermes_root` to the absolute path of an existing Hermes repository checkout on
-the managed host; the playbooks orchestrate that checkout but do not clone it.
+the managed host; the playbooks operate against that checkout and do not clone
+or prepare it for you.
 
 ## Documentation
 
