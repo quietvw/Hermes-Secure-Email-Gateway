@@ -3073,9 +3073,11 @@ create_databases() {
         # current install's NEW password silently fails to authenticate.
         # Ensure '%' account exists, then force-sync its password so stale
         # credentials from prior partial installs cannot persist.
-        docker exec hermes_db_server mysql -u root -e "
+        if ! docker exec hermes_db_server mysql -u root -e "
             CREATE DATABASE IF NOT EXISTS \`${dbname}\` CHARACTER SET utf8mb4 COLLATE ${collation};
-        " 2>> "$LOG_FILE"
+        " 2>> "$LOG_FILE"; then
+            error "Failed to create database '${dbname}' (see $LOG_FILE)"
+        fi
 
         if ! host_rows="$(
             docker exec hermes_db_server mysql -N -B -u root -e \

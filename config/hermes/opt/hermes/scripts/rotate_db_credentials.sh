@@ -167,8 +167,11 @@ ensure_wildcard_user_exists() {
     local user_esc pass_esc
     user_esc="$(sql_escape "$user")"
     pass_esc="$(sql_escape "$pass")"
-    docker exec hermes_db_server mysql -u root -e \
-        "CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';" >/dev/null 2>&1
+    if ! docker exec hermes_db_server mysql -u root -e \
+        "CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';" >/dev/null 2>&1; then
+        log_error "Failed to ensure wildcard MariaDB user exists: '${user}'@'%'"
+        return 1
+    fi
 }
 
 # Restore a single user to its old password, both in the DB and in the creds
@@ -665,8 +668,14 @@ if [[ "$ROTATE_HERMES" == true ]]; then
     else
         hermes_user_esc="$(sql_escape "$NEW_HERMES_USER")"
         hermes_pass_esc="$(sql_escape "$NEW_HERMES_PASS")"
-        normalize_user_hosts "${NEW_HERMES_USER}"
-        ensure_wildcard_user_exists "${NEW_HERMES_USER}" "${NEW_HERMES_PASS}"
+        if ! normalize_user_hosts "${NEW_HERMES_USER}"; then
+            rollback_user "${NEW_HERMES_USER}" "${OLD_HERMES_PASS}" "${CREDS_DIR}/hermes_password"
+            exit 1
+        fi
+        if ! ensure_wildcard_user_exists "${NEW_HERMES_USER}" "${NEW_HERMES_PASS}"; then
+            rollback_user "${NEW_HERMES_USER}" "${OLD_HERMES_PASS}" "${CREDS_DIR}/hermes_password"
+            exit 1
+        fi
         if ! docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${hermes_user_esc}'@'%' IDENTIFIED BY '${hermes_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
             log_error "  ALTER USER failed for ${NEW_HERMES_USER}"
@@ -696,8 +705,14 @@ if [[ "$ROTATE_CIPHERMAIL" == true ]]; then
     else
         ciphermail_user_esc="$(sql_escape "$NEW_CIPHERMAIL_USER")"
         ciphermail_pass_esc="$(sql_escape "$NEW_CIPHERMAIL_PASS")"
-        normalize_user_hosts "${NEW_CIPHERMAIL_USER}"
-        ensure_wildcard_user_exists "${NEW_CIPHERMAIL_USER}" "${NEW_CIPHERMAIL_PASS}"
+        if ! normalize_user_hosts "${NEW_CIPHERMAIL_USER}"; then
+            rollback_user "${NEW_CIPHERMAIL_USER}" "${OLD_CIPHERMAIL_PASS}" "${CREDS_DIR}/ciphermail_password"
+            exit 1
+        fi
+        if ! ensure_wildcard_user_exists "${NEW_CIPHERMAIL_USER}" "${NEW_CIPHERMAIL_PASS}"; then
+            rollback_user "${NEW_CIPHERMAIL_USER}" "${OLD_CIPHERMAIL_PASS}" "${CREDS_DIR}/ciphermail_password"
+            exit 1
+        fi
         if ! docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${ciphermail_user_esc}'@'%' IDENTIFIED BY '${ciphermail_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
             log_error "  ALTER USER failed for ${NEW_CIPHERMAIL_USER}"
@@ -723,8 +738,14 @@ if [[ "$ROTATE_SYSLOG" == true ]]; then
     else
         syslog_user_esc="$(sql_escape "$NEW_SYSLOG_USER")"
         syslog_pass_esc="$(sql_escape "$NEW_SYSLOG_PASS")"
-        normalize_user_hosts "${NEW_SYSLOG_USER}"
-        ensure_wildcard_user_exists "${NEW_SYSLOG_USER}" "${NEW_SYSLOG_PASS}"
+        if ! normalize_user_hosts "${NEW_SYSLOG_USER}"; then
+            rollback_user "${NEW_SYSLOG_USER}" "${OLD_SYSLOG_PASS}" "${CREDS_DIR}/syslog_password"
+            exit 1
+        fi
+        if ! ensure_wildcard_user_exists "${NEW_SYSLOG_USER}" "${NEW_SYSLOG_PASS}"; then
+            rollback_user "${NEW_SYSLOG_USER}" "${OLD_SYSLOG_PASS}" "${CREDS_DIR}/syslog_password"
+            exit 1
+        fi
         if ! docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${syslog_user_esc}'@'%' IDENTIFIED BY '${syslog_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
             log_error "  ALTER USER failed for ${NEW_SYSLOG_USER}"
