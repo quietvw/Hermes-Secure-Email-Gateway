@@ -146,7 +146,6 @@ normalize_user_hosts() {
         docker exec hermes_db_server mysql -N -B -u root -e \
             "SELECT Host FROM mysql.user WHERE User='${user_esc}' AND Host <> '%';"
     )
-    docker exec hermes_db_server mysql -u root -e "FLUSH PRIVILEGES;" >/dev/null 2>&1
 }
 
 # Restore a single user to its old password, both in the DB and in the creds
