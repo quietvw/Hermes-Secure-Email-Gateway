@@ -388,10 +388,20 @@ queryExecute(
 </cfcatch>
 <cffinally>
   <cfif smtpHashInputFile NEQ "" AND FileExists(smtpHashInputFile)>
-    <cffile action="delete" file="#smtpHashInputFile#">
+    <cftry>
+      <cffile action="delete" file="#smtpHashInputFile#">
+    <cfcatch type="any">
+      <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp hash file #smtpHashInputFile#: #cfcatch.message# #cfcatch.detail#">
+    </cfcatch>
+    </cftry>
   </cfif>
   <cfif IsDefined("smtpHashTempDir") AND smtpHashTempDir NEQ "" AND DirectoryExists(smtpHashTempDir)>
-    <cfdirectory action="delete" directory="#smtpHashTempDir#" recurse="true">
+    <cftry>
+      <cfdirectory action="delete" directory="#smtpHashTempDir#" recurse="true">
+    <cfcatch type="any">
+      <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp directory #smtpHashTempDir#: #cfcatch.message# #cfcatch.detail#">
+    </cfcatch>
+    </cftry>
   </cfif>
 </cffinally>
 </cftry>
