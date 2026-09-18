@@ -23,18 +23,7 @@
         HERMES_ROOT: "{{ hermes_root_effective }}"
       register: hermes_smoke_test
       changed_when: false
-      failed_when: false
 
     - name: Show smoke test output
       ansible.builtin.debug:
         var: hermes_smoke_test.stdout_lines
-
-    - name: Fail when smoke test reports errors
-      ansible.builtin.fail:
-        msg: |-
-          Hermes smoke test failed with rc={{ hermes_smoke_test.rc }}.
-          stdout:
-          {{ (hermes_smoke_test.stdout | default('')) | trim }}
-          stderr:
-          {{ (hermes_smoke_test.stderr | default('')) | trim }}
-      when: hermes_smoke_test.rc != 0

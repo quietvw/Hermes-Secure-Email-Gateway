@@ -297,7 +297,7 @@ values, then run the playbook entrypoint:
 ./hermes_exec install
 ```
 
-`./hermes_exec configure` writes two local files that are intentionally gitignored:
+`./hermes_exec configure` writes two local files that are intentionally ignored by Git:
 
 - `ansible/inventory/hosts.yml`
 - `ansible/vars/hermes.yml`

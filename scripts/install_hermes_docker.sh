@@ -4695,7 +4695,12 @@ main() {
     echo "  2. docker compose up -d --build (5-15 min on fresh host: image pulls + fail2ban build)"
     echo "  3. Database + LDAP + Nextcloud initialization (~2 min)"
     echo ""
-    read -p "Continue? (y/N): " CONFIRM
+    if [[ "${HERMES_INSTALL_AUTO_CONFIRM:-0}" == "1" ]]; then
+        CONFIRM="y"
+        log "Auto-confirming install continuation via HERMES_INSTALL_AUTO_CONFIRM=1"
+    else
+        read -p "Continue? (y/N): " CONFIRM
+    fi
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
         echo "Installation cancelled."
         exit 0
