@@ -57,13 +57,18 @@
         state: directory
         mode: "0755"
 
+    - name: Check whether installer config file exists
+      ansible.builtin.stat:
+        path: "{{ hermes_root_effective }}/.hermes_install_config"
+      register: hermes_install_config_file
+
     - name: Remove previously managed installer config keys
       ansible.builtin.replace:
         path: "{{ hermes_root_effective }}/.hermes_install_config"
         regexp: "^{{ item }}=.*\n?"
         replace: ""
-        create: true
         mode: "0644"
+      when: hermes_install_config_file.stat.exists
       loop:
         - "DATA_MOUNT"
         - "ARCHIVE_MOUNT"
