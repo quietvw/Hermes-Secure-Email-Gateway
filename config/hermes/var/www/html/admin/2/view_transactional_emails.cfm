@@ -279,12 +279,12 @@ queryExecute(
     </cfif>
 <cftry>
     <!--
-      Use doveadm's non-interactive password option for deterministic hashing.
-      Password content is generated internally by Hermes and validated above.
+      Keep plaintext off process arguments: pass password via stdin to
+      doveadm inside hermes_dovecot.
     -->
     <cfexecute
-      name="#dockerBinary#"
-      arguments='exec hermes_dovecot doveadm pw -s ARGON2ID -p #smtpPasswordPlain#'
+      name="/bin/sh"
+      arguments='-c "printf \"%s\n%s\n\" \"#smtpPasswordPlain#\" \"#smtpPasswordPlain#\" | #dockerBinary# exec -i hermes_dovecot doveadm pw -s ARGON2ID"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
@@ -406,13 +406,11 @@ queryExecute(
 <cfquery name="getSmtpCreds" datasource="hermes">
   SELECT id, name, username, allowed_senders, allowed_domains, active, created_at
   FROM transactional_smtp_credentials
-  WHERE active = 1
   ORDER BY created_at DESC
 </cfquery>
 <cfquery name="getApiTokens" datasource="hermes">
   SELECT id, name, allowed_senders, allowed_domains, any_ip, ip_allowlist, active, created_at, last_used_at
   FROM transactional_api_tokens
-  WHERE active = 1
   ORDER BY created_at DESC
 </cfquery>
 
