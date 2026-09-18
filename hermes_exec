@@ -49,24 +49,8 @@ require_ansible() {
     fi
 }
 
-ensure_generated_files() {
-    mkdir -p "${ANSIBLE_DIR}/inventory" "${ANSIBLE_DIR}/vars"
-    [[ -f "${INVENTORY_FILE}" ]] || cp "${INVENTORY_EXAMPLE}" "${INVENTORY_FILE}"
-}
-
-derive_default_domain() {
-    local hostname="$1"
-    if [[ "$hostname" == *.* ]]; then
-        echo "${hostname#*.}"
-    else
-        echo "example.com"
-    fi
-}
-
-generate_config() {
-    ensure_generated_files
-    if [[ ! -f "${VARS_FILE}" ]]; then
-        python3 - <<'PY' "${VARS_FILE}" "${SCRIPT_DIR}"
+write_default_vars_file() {
+    python3 - <<'PY' "${VARS_FILE}" "${SCRIPT_DIR}"
 from pathlib import Path
 import sys
 
@@ -96,7 +80,25 @@ path.write_text(
     encoding="utf-8",
 )
 PY
+}
+
+ensure_generated_files() {
+    mkdir -p "${ANSIBLE_DIR}/inventory" "${ANSIBLE_DIR}/vars"
+    [[ -f "${INVENTORY_FILE}" ]] || cp "${INVENTORY_EXAMPLE}" "${INVENTORY_FILE}"
+    [[ -f "${VARS_FILE}" ]] || write_default_vars_file
+}
+
+derive_default_domain() {
+    local hostname="$1"
+    if [[ "$hostname" == *.* ]]; then
+        echo "${hostname#*.}"
+    else
+        echo "example.com"
     fi
+}
+
+generate_config() {
+    ensure_generated_files
     echo "Generated:"
     echo "  ${INVENTORY_FILE}"
     echo "  ${VARS_FILE}"

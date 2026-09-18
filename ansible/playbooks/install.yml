@@ -20,14 +20,17 @@
         that:
           - hermes_eula_accepted | default(false) | bool
           - (hermes_host_ip | default('')) | length > 0
+          - hermes_host_ip != '192.0.2.10'
           - (hermes_mail_hostname | default('')) | length > 0
+          - hermes_mail_hostname != 'smtp.example.com'
           - (hermes_mail_domain | default('')) | length > 0
+          - hermes_mail_domain != 'example.com'
           - (hermes_dns_forwarders_csv | default('')) | length > 0
           - (hermes_data_mount | default('')) | length > 0
           - (hermes_archive_mount | default('')) | length > 0
           - (hermes_vmail_mount | default('')) | length > 0
           - (hermes_files_mount | default('')) | length > 0
-        fail_msg: "Populate ansible/vars/hermes.yml with ./hermes_exec configure before running install."
+        fail_msg: "Populate ansible/vars/hermes.yml with real install values via ./hermes_exec configure before running install."
 
   tasks:
     - name: Display Hermes EULA notice for Ansible-driven installs

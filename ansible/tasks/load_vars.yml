@@ -15,4 +15,4 @@
 
 - name: Set effective Hermes root
   ansible.builtin.set_fact:
-    hermes_root_effective: "{{ hermes_root | default(hermes_repo_root) }}"
+    hermes_root_effective: "{{ hermes_repo_root if (hermes_root | default('')) == '/absolute/path/to/Hermes-Secure-Email-Gateway' else (hermes_root | default(hermes_repo_root)) }}"
