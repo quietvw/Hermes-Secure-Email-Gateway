@@ -147,6 +147,20 @@ normalize_user_hosts() {
         log_error "Refusing host cleanup for protected MariaDB account: root"
         return 1
     fi
+    local managed_service_user=false
+    local allowed_user_file allowed_user
+    for allowed_user_file in hermes_username ciphermail_username syslog_username; do
+        [[ -f "${CREDS_DIR}/${allowed_user_file}" ]] || continue
+        allowed_user="$(tr -d '\n' < "${CREDS_DIR}/${allowed_user_file}")"
+        if [[ -n "$allowed_user" && "$user" == "$allowed_user" ]]; then
+            managed_service_user=true
+            break
+        fi
+    done
+    if [[ "$managed_service_user" != true ]]; then
+        log_error "Refusing host cleanup for unmanaged MariaDB account: ${user}"
+        return 1
+    fi
     local user_esc host host_esc host_rows
     user_esc="$(sql_escape "$user")"
     local host_query

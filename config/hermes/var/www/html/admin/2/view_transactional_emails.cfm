@@ -354,7 +354,11 @@ queryExecute(
 </cfcatch>
 </cftry>
 <cfif hashCommandPreflightExecutionFailed OR NOT hashCommandPreflightOk>
-  <cfset session.smtpCredentialErrorDetail = "Unable to run required hash commands in the hermes_dovecot container. " & Left(Trim(hashCommandPreflightOutput & " " & hashCommandPreflightError), 200)>
+  <cflog
+    file="hermes"
+    type="error"
+    text="Transactional SMTP hash preflight failed: #Left(Trim(hashCommandPreflightOutput & ' ' & hashCommandPreflightError), 1000)#">
+  <cfset session.smtpCredentialErrorDetail = "Unable to run required hash commands in the hermes_dovecot container.">
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfif>
