@@ -272,7 +272,7 @@ queryExecute(
   -->
   <cfexecute
     name="/bin/sh"
-    arguments='-c "printf %s \"#smtpPasswordBase64#\" | /usr/local/bin/docker exec -i hermes_dovecot bash -o pipefail -c '\''umask 077; tmp=/tmp/hermes_tx_pw.$$; trap \"rm -f \\\"$tmp\\\"\" EXIT; cat | base64 -d > \"$tmp\" && { cat \"$tmp\"; printf \"\n\"; cat \"$tmp\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
+    arguments='-c "printf %s \"#smtpPasswordBase64#\" | /usr/local/bin/docker exec -i hermes_dovecot bash -o pipefail -c '\''umask 077; tmp=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; trap \"rm -f \\\"$tmp\\\"\" EXIT; cat | base64 -d > \"$tmp\" && { cat \"$tmp\"; printf \"\n\"; cat \"$tmp\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
     variable="smtpPasswordHash"
     errorVariable="smtpPasswordHashError"
     timeout="60"></cfexecute>

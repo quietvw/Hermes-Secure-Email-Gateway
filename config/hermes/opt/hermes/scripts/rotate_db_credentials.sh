@@ -109,7 +109,8 @@ generate_password() {
 }
 
 sql_escape() {
-    printf "%s" "$1" | sed "s/'/''/g"
+    local escaped="${1//\'/\'\'}"
+    printf "%s" "$escaped"
 }
 
 # Test whether (user, password) authenticates against MariaDB.
@@ -185,7 +186,9 @@ rollback_user() {
     old_pass_esc="$(sql_escape "$old_pass")"
     log_warn "  Rolling back ${user} to old password..."
     if docker exec hermes_db_server mysql -u root -e \
-        "ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${old_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
+        "CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${old_pass_esc}';
+         ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${old_pass_esc}';
+         FLUSH PRIVILEGES;" 2>/dev/null; then
         log_info "  ALTER USER rolled back for ${user}"
     else
         log_error "  ALTER USER rollback FAILED for ${user} — manual intervention required"
