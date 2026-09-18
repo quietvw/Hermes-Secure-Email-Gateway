@@ -257,6 +257,11 @@ queryExecute(
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
   <cfset smtpPasswordBase64 = ToBase64(smtpPasswordPlain, "UTF-8")>
+  <cfif REFind("[^A-Za-z0-9+/=]", smtpPasswordBase64) GT 0>
+    <cfset session.smtpCredentialErrorDetail = "Generated password encoding was invalid.">
+    <cfset session.m = 30>
+    <cflocation url="view_transactional_emails.cfm" addtoken="no">
+  </cfif>
 
 <cftry>
   <!--
@@ -267,7 +272,7 @@ queryExecute(
   -->
   <cfexecute
     name="/bin/sh"
-    arguments='-c "printf %s '\''#smtpPasswordBase64#'\'' | /usr/local/bin/docker exec -i hermes_dovecot sh -c '\''tmp=/tmp/hermes_tx_pw.$$; trap \"rm -f \\\"$tmp\\\"\" EXIT; cat | base64 -d > \"$tmp\" && { cat \"$tmp\"; printf \"\n\"; cat \"$tmp\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
+    arguments='-c "printf %s \"#smtpPasswordBase64#\" | /usr/local/bin/docker exec -i hermes_dovecot sh -c '\''tmp=/tmp/hermes_tx_pw.$$; trap \"rm -f \\\"$tmp\\\"\" EXIT; cat | base64 -d > \"$tmp\" && { cat \"$tmp\"; printf \"\n\"; cat \"$tmp\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
     variable="smtpPasswordHash"
     errorVariable="smtpPasswordHashError"
     timeout="60"></cfexecute>
