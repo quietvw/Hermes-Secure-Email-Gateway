@@ -293,6 +293,14 @@ queryExecute(
 <cfif NOT DirectoryExists("/opt/hermes/tmp")>
   <cfdirectory action="create" directory="/opt/hermes/tmp" mode="700">
 </cfif>
+<cftry>
+  <cfexecute name="/bin/chmod" arguments="700 /opt/hermes/tmp" timeout="30"></cfexecute>
+<cfcatch type="any">
+  <cfset session.smtpCredentialErrorDetail = "Unable to secure temporary directory permissions for SMTP hash generation.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfcatch>
+</cftry>
 <cfset smtpHashInputFile = "/opt/hermes/tmp/tx_smtp_b64_" & customtrans3 & ".txt">
 <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashInputFile) EQ 0>
   <cfset session.smtpCredentialErrorDetail = "Temporary hash file path validation failed.">
@@ -434,6 +442,7 @@ queryExecute(
           SELECT COUNT(*) AS row_count
           FROM transactional_smtp_credentials
           WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
+            AND active = 1
         </cfquery>
         <cfif Val(getRemainingTransactionalUsername.row_count) EQ 0>
           <cfquery datasource="hermes">
