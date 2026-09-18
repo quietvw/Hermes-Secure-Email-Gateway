@@ -3071,9 +3071,8 @@ create_databases() {
         # means stale users from a prior install (whose MariaDB data
         # survived an incomplete wipe) keep their OLD password — and the
         # current install's NEW password silently fails to authenticate.
-        # The ALTER USER below force-syncs the password whether the user is
-        # being created fresh or already existed. Idempotent + makes the
-        # whole step safe to re-run on a partially-stale MariaDB volume.
+        # Recreate the '%' account so the password is force-synced even if a
+        # stale account survived from a prior partial install.
         docker exec hermes_db_server mysql -u root -e "
             CREATE DATABASE IF NOT EXISTS \`${dbname}\` CHARACTER SET utf8mb4 COLLATE ${collation};
         " 2>> "$LOG_FILE"
@@ -3096,8 +3095,8 @@ create_databases() {
         )
 
         docker exec hermes_db_server mysql -u root -e "
-            CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
-            ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
+            DROP USER IF EXISTS '${user_esc}'@'%';
+            CREATE USER '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
             GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${user_esc}'@'%';
         " 2>> "$LOG_FILE"
     }
