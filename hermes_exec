@@ -50,27 +50,17 @@ require_ansible() {
 }
 
 write_default_vars_file() {
-    python3 - <<'PY' "${VARS_FILE}" "${SCRIPT_DIR}"
+    python3 - <<'PY' "${ANSIBLE_DIR}/vars/hermes.yml.example" "${VARS_FILE}" "${SCRIPT_DIR}"
 from pathlib import Path
 import json
 import sys
 
-path = Path(sys.argv[1])
-repo_root = sys.argv[2]
-payload = {
-    "hermes_root": repo_root,
-    "hermes_host_ip": "192.0.2.10",
-    "hermes_mail_hostname": "smtp.example.com",
-    "hermes_mail_domain": "example.com",
-    "hermes_dns_forwarders": ["1.1.1.1", "8.8.8.8"],
-    "hermes_data_mount": "/mnt/data",
-    "hermes_archive_mount": "/mnt/archive",
-    "hermes_vmail_mount": "/mnt/vmail",
-    "hermes_files_mount": "/mnt/files",
-    "hermes_enable_nextcloud": False,
-    "hermes_eula_accepted": False,
-}
-path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+example_path = Path(sys.argv[1])
+output_path = Path(sys.argv[2])
+repo_root = sys.argv[3]
+payload = json.loads(example_path.read_text(encoding="utf-8"))
+payload["hermes_root"] = repo_root
+output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 }
 
