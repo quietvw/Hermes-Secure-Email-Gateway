@@ -397,7 +397,12 @@ queryExecute(
   </cfif>
   <cfif IsDefined("smtpHashTempDir") AND smtpHashTempDir NEQ "" AND DirectoryExists(smtpHashTempDir)>
     <cftry>
-      <cfdirectory action="delete" directory="#smtpHashTempDir#">
+      <cfdirectory action="list" directory="#smtpHashTempDir#" name="smtpHashTempDirEntries" type="all">
+      <cfif smtpHashTempDirEntries.recordcount EQ 0>
+        <cfdirectory action="delete" directory="#smtpHashTempDir#">
+      <cfelse>
+        <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: temp directory not empty, leaving in place #smtpHashTempDir#">
+      </cfif>
     <cfcatch type="any">
       <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp directory #smtpHashTempDir#: #cfcatch.message# #cfcatch.detail#">
     </cfcatch>
@@ -461,7 +466,6 @@ queryExecute(
           SELECT COUNT(*) AS row_count
           FROM transactional_smtp_credentials
           WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
-            AND active = 1
         </cfquery>
         <cfif Val(getRemainingTransactionalUsername.row_count) EQ 0>
           <cfquery datasource="hermes">
