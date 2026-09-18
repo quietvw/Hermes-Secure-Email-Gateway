@@ -293,15 +293,21 @@ queryExecute(
 <cfif NOT DirectoryExists("/opt/hermes/tmp")>
   <cfdirectory action="create" directory="/opt/hermes/tmp" mode="700">
 </cfif>
+<cfset smtpHashTempDir = "/opt/hermes/tmp/tx_smtp_" & customtrans3>
+<cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashTempDir) EQ 0>
+  <cfset session.smtpCredentialErrorDetail = "Temporary hash directory path validation failed.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfif>
 <cftry>
-  <cfexecute name="/bin/chmod" arguments="700 /opt/hermes/tmp" timeout="30"></cfexecute>
+  <cfdirectory action="create" directory="#smtpHashTempDir#" mode="700">
 <cfcatch type="any">
-  <cfset session.smtpCredentialErrorDetail = "Unable to secure temporary directory permissions for SMTP hash generation.">
+  <cfset session.smtpCredentialErrorDetail = "Unable to create isolated temporary directory for SMTP hash generation.">
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfcatch>
 </cftry>
-<cfset smtpHashInputFile = "/opt/hermes/tmp/tx_smtp_b64_" & customtrans3 & ".txt">
+<cfset smtpHashInputFile = smtpHashTempDir & "/password.b64">
 <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashInputFile) EQ 0>
   <cfset session.smtpCredentialErrorDetail = "Temporary hash file path validation failed.">
   <cfset session.m = 30>
@@ -384,6 +390,9 @@ queryExecute(
   <cfif smtpHashInputFile NEQ "" AND FileExists(smtpHashInputFile)>
     <cffile action="delete" file="#smtpHashInputFile#">
   </cfif>
+  <cfif IsDefined("smtpHashTempDir") AND smtpHashTempDir NEQ "" AND DirectoryExists(smtpHashTempDir)>
+    <cfdirectory action="delete" directory="#smtpHashTempDir#" recurse="true">
+  </cfif>
 </cffinally>
 </cftry>
 
@@ -448,6 +457,8 @@ queryExecute(
           <cfquery datasource="hermes">
             DELETE FROM app_passwords
             WHERE username = <cfqueryparam value="#getDeleteSmtpCred.username#" cfsqltype="cf_sql_varchar">
+              AND is_system = 1
+              AND label LIKE 'Transactional SMTP%'
           </cfquery>
         </cfif>
       </cftransaction>

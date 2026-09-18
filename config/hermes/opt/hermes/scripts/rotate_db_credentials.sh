@@ -190,6 +190,9 @@ rollback_user() {
     user_esc="$(sql_escape "$user")"
     old_pass_esc="$(sql_escape "$old_pass")"
     log_warn "  Rolling back ${user} to old password..."
+    if ! normalize_user_hosts "$user"; then
+        log_error "  Failed to normalize host-specific rows during rollback for ${user}"
+    fi
     if docker exec hermes_db_server mysql -u root -e \
         "CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${old_pass_esc}';
          ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${old_pass_esc}';
