@@ -337,6 +337,7 @@ queryExecute(
 <cfset hashCommandPreflightError = "">
 <cfset hashCommandPreflightOk = false>
 <cfset hashCommandPreflightExecutionFailed = false>
+<cfset hashCommandPreflightOutputNormalized = "">
 <cftry>
     <cfexecute
       name="/bin/sh"
@@ -344,7 +345,8 @@ queryExecute(
       variable="hashCommandPreflightOutput"
       errorVariable="hashCommandPreflightError"
       timeout="20"></cfexecute>
-  <cfif Trim(hashCommandPreflightOutput) EQ "OK">
+  <cfset hashCommandPreflightOutputNormalized = REReplace(hashCommandPreflightOutput, "[\r\n]", "", "all")>
+  <cfif Trim(hashCommandPreflightOutputNormalized) EQ "OK">
     <cfset hashCommandPreflightOk = true>
   </cfif>
 <cfcatch type="any">

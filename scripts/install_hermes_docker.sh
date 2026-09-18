@@ -3077,6 +3077,23 @@ create_databases() {
         if [[ "$user" == "root" ]]; then
             error "Refusing stale-host cleanup for protected MariaDB account 'root'"
         fi
+        local managed_service_user=false
+        local _allowed_service_user
+        for _allowed_service_user in \
+            "$HERMES_DB_USER" \
+            "$AUTHELIA_DB_USER" \
+            "$OPENDMARC_DB_USER" \
+            "$SYSLOG_DB_USER" \
+            "$CIPHERMAIL_DB_USER" \
+            "$NEXTCLOUD_DB_USER"; do
+            if [[ -n "$_allowed_service_user" && "$user" == "$_allowed_service_user" ]]; then
+                managed_service_user=true
+                break
+            fi
+        done
+        if [[ "$managed_service_user" != true ]]; then
+            error "Refusing stale-host cleanup for unmanaged MariaDB account '${user}'"
+        fi
         local user_esc
         local pass_esc
         local host host_esc host_rows
