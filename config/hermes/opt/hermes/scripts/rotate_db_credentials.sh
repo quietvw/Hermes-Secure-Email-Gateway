@@ -155,6 +155,15 @@ normalize_user_hosts() {
     )
 }
 
+ensure_wildcard_user_exists() {
+    local user="$1" pass="$2"
+    local user_esc pass_esc
+    user_esc="$(sql_escape "$user")"
+    pass_esc="$(sql_escape "$pass")"
+    docker exec hermes_db_server mysql -u root -e \
+        "CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';" >/dev/null 2>&1
+}
+
 # Restore a single user to its old password, both in the DB and in the creds
 # file. Called when a post-rotation auth test fails. Config-file backups
 # (.bak.YYYYMMDD) are left in place — operator must restore those manually
@@ -650,6 +659,7 @@ if [[ "$ROTATE_HERMES" == true ]]; then
         hermes_user_esc="$(sql_escape "$NEW_HERMES_USER")"
         hermes_pass_esc="$(sql_escape "$NEW_HERMES_PASS")"
         normalize_user_hosts "${NEW_HERMES_USER}"
+        ensure_wildcard_user_exists "${NEW_HERMES_USER}" "${NEW_HERMES_PASS}"
         if ! docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${hermes_user_esc}'@'%' IDENTIFIED BY '${hermes_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
             log_error "  ALTER USER failed for ${NEW_HERMES_USER}"
@@ -680,6 +690,7 @@ if [[ "$ROTATE_CIPHERMAIL" == true ]]; then
         ciphermail_user_esc="$(sql_escape "$NEW_CIPHERMAIL_USER")"
         ciphermail_pass_esc="$(sql_escape "$NEW_CIPHERMAIL_PASS")"
         normalize_user_hosts "${NEW_CIPHERMAIL_USER}"
+        ensure_wildcard_user_exists "${NEW_CIPHERMAIL_USER}" "${NEW_CIPHERMAIL_PASS}"
         if ! docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${ciphermail_user_esc}'@'%' IDENTIFIED BY '${ciphermail_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
             log_error "  ALTER USER failed for ${NEW_CIPHERMAIL_USER}"
@@ -706,6 +717,7 @@ if [[ "$ROTATE_SYSLOG" == true ]]; then
         syslog_user_esc="$(sql_escape "$NEW_SYSLOG_USER")"
         syslog_pass_esc="$(sql_escape "$NEW_SYSLOG_PASS")"
         normalize_user_hosts "${NEW_SYSLOG_USER}"
+        ensure_wildcard_user_exists "${NEW_SYSLOG_USER}" "${NEW_SYSLOG_PASS}"
         if ! docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${syslog_user_esc}'@'%' IDENTIFIED BY '${syslog_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
             log_error "  ALTER USER failed for ${NEW_SYSLOG_USER}"
