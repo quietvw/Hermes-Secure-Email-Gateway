@@ -126,6 +126,15 @@ test_root_socket_auth() {
     docker exec hermes_db_server mysql -u root -e "SELECT 1" >/dev/null 2>&1
 }
 
+# Remove host-specific MariaDB user rows for Hermes-managed service accounts.
+# If stale per-host rows exist from older installs, MySQL may prefer those over
+# '%' and reject credentials that otherwise validate.
+normalize_user_hosts() {
+    local user="$1"
+    docker exec hermes_db_server mysql -u root -e \
+        "DELETE FROM mysql.user WHERE User='${user}' AND Host <> '%'; FLUSH PRIVILEGES;" >/dev/null 2>&1
+}
+
 # Restore a single user to its old password, both in the DB and in the creds
 # file. Called when a post-rotation auth test fails. Config-file backups
 # (.bak.YYYYMMDD) are left in place — operator must restore those manually
@@ -617,6 +626,7 @@ if [[ "$ROTATE_HERMES" == true ]]; then
     else
         echo -n "$NEW_HERMES_PASS" > "${CREDS_DIR}/hermes_password"
         chmod 600 "${CREDS_DIR}/hermes_password"
+        normalize_user_hosts "${NEW_HERMES_USER}"
         docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${NEW_HERMES_USER}'@'%' IDENTIFIED BY '${NEW_HERMES_PASS}'; FLUSH PRIVILEGES;" 2>/dev/null
         # Post-rotation auth test — verify the new password actually works.
@@ -640,6 +650,7 @@ if [[ "$ROTATE_CIPHERMAIL" == true ]]; then
     else
         echo -n "$NEW_CIPHERMAIL_PASS" > "${CREDS_DIR}/ciphermail_password"
         chmod 600 "${CREDS_DIR}/ciphermail_password"
+        normalize_user_hosts "${NEW_CIPHERMAIL_USER}"
         docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${NEW_CIPHERMAIL_USER}'@'%' IDENTIFIED BY '${NEW_CIPHERMAIL_PASS}'; FLUSH PRIVILEGES;" 2>/dev/null
         if ! test_auth "${NEW_CIPHERMAIL_USER}" "${NEW_CIPHERMAIL_PASS}"; then
@@ -659,6 +670,7 @@ if [[ "$ROTATE_SYSLOG" == true ]]; then
     else
         echo -n "$NEW_SYSLOG_PASS" > "${CREDS_DIR}/syslog_password"
         chmod 600 "${CREDS_DIR}/syslog_password"
+        normalize_user_hosts "${NEW_SYSLOG_USER}"
         docker exec hermes_db_server mysql -u root -e \
             "ALTER USER '${NEW_SYSLOG_USER}'@'%' IDENTIFIED BY '${NEW_SYSLOG_PASS}'; FLUSH PRIVILEGES;" 2>/dev/null
         if ! test_auth "${NEW_SYSLOG_USER}" "${NEW_SYSLOG_PASS}"; then

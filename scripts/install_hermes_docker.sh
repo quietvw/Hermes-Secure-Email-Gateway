@@ -3073,6 +3073,7 @@ create_databases() {
         # whole step safe to re-run on a partially-stale MariaDB volume.
         docker exec hermes_db_server mysql -u root -e "
             CREATE DATABASE IF NOT EXISTS \`${dbname}\` CHARACTER SET utf8mb4 COLLATE ${collation};
+            DELETE FROM mysql.user WHERE User='${user}' AND Host <> '%';
             CREATE USER IF NOT EXISTS '${user}'@'%' IDENTIFIED BY '${pass}';
             ALTER USER '${user}'@'%' IDENTIFIED BY '${pass}';
             GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${user}'@'%';
