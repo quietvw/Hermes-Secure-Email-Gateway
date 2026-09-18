@@ -285,16 +285,19 @@ queryExecute(
     </cfif>
 <cfset _transLength = 24>
 <cfinclude template="./inc/generate_customtrans.cfm">
+<cfif NOT DirectoryExists("/opt/hermes/tmp")>
+  <cfdirectory action="create" directory="/opt/hermes/tmp">
+</cfif>
 <cfset smtpHashInputFile = "/opt/hermes/tmp/tx_smtp_b64_" & customtrans3 & ".txt">
 <cftry>
-    <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8">
+    <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
     <!--
       Keep plaintext off process arguments. Pass Base64 data into the
       container, decode there, and feed doveadm via stdin.
     -->
     <cfexecute
       name="/bin/sh"
-      arguments='-c "chmod 600 \"$1\" && cat \"$1\" | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && cat \"$tmp2\" | doveadm pw -s ARGON2ID'\''" sh "#smtpHashInputFile#"'
+      arguments='-c "cat \"$1\" | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && cat \"$tmp2\" | doveadm pw -s ARGON2ID'\''" sh "#smtpHashInputFile#"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
