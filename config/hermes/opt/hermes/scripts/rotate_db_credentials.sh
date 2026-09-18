@@ -109,8 +109,7 @@ generate_password() {
 }
 
 sql_escape() {
-    local escaped="${1//\'/\'\'}"
-    printf "%s" "$escaped"
+    printf "%s" "$1" | sed "s/'/''/g"
 }
 
 # Test whether (user, password) authenticates against MariaDB.

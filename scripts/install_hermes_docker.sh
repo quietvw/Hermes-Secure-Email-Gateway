@@ -162,6 +162,10 @@ generate_random_username() {
     echo "${word}$(( RANDOM % 9000 + 1000 ))"
 }
 
+sql_escape() {
+    printf "%s" "$1" | sed "s/'/''/g"
+}
+
 generate_hex() {
     # Generate hex string (for JWT secrets, encryption keys)
     openssl rand -hex "$1"
@@ -3062,9 +3066,11 @@ create_databases() {
         local user="$2"
         local pass="$3"
         local collation="${4:-utf8mb4_unicode_ci}"
-        local user_esc="${user//\'/\'\'}"
-        local pass_esc="${pass//\'/\'\'}"
+        local user_esc
+        local pass_esc
         local host host_esc host_rows
+        user_esc="$(sql_escape "$user")"
+        pass_esc="$(sql_escape "$pass")"
 
         log "Creating database '${dbname}' (user '${user}')..."
         # `CREATE USER IF NOT EXISTS` is a NO-OP if the user exists, which
@@ -3095,7 +3101,7 @@ create_databases() {
 
         while IFS= read -r host; do
             [[ -z "$host" ]] && continue
-            host_esc="${host//\'/\'\'}"
+            host_esc="$(sql_escape "$host")"
             if ! docker exec hermes_db_server mysql -u root -e \
                 "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"; then
                 error "Failed to drop stale MariaDB user host entry '${user}'@'${host}' (see $LOG_FILE)"

@@ -267,6 +267,12 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
+    <cfset smtpPasswordBase64 = ToBase64(smtpPasswordPlain, "UTF-8")>
+    <cfif REFind("[^A-Za-z0-9+/=]", smtpPasswordBase64) GT 0>
+      <cfset session.smtpCredentialErrorDetail = "Generated password encoding was invalid.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
     <cfset dockerBinary = "">
     <cfif FileExists("/usr/local/bin/docker")>
       <cfset dockerBinary = "/usr/local/bin/docker">
@@ -279,12 +285,12 @@ queryExecute(
     </cfif>
 <cftry>
     <!--
-      Keep plaintext off process arguments: pass password via stdin to
-      doveadm inside hermes_dovecot.
+      Keep plaintext off process arguments. Pass Base64 data into the
+      container, decode there, and feed doveadm via stdin.
     -->
     <cfexecute
       name="/bin/sh"
-      arguments='-c "printf \"%s\n%s\n\" \"#smtpPasswordPlain#\" \"#smtpPasswordPlain#\" | #dockerBinary# exec -i hermes_dovecot doveadm pw -s ARGON2ID"'
+      arguments='-c "printf %s \"#smtpPasswordBase64#\" | #dockerBinary# exec -i hermes_dovecot sh -c '\''tmp=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp\\\"\" EXIT; base64 -d > \"$tmp\" && { cat \"$tmp\"; printf \"\n\"; cat \"$tmp\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
       variable="smtpPasswordHash"
       errorVariable="smtpPasswordHashError"
       timeout="60"></cfexecute>
