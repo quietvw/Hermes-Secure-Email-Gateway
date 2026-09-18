@@ -464,7 +464,13 @@ queryExecute(
           AND LEFT(username, 5) = 'smtp_'
           AND active = 1
       </cfquery>
-      <cfif StructKeyExists(revokeSmtpCredentialResult, "recordcount") AND revokeSmtpCredentialResult.recordcount GT 0>
+      <cfset revokeSmtpRowsAffected = 0>
+      <cfif StructKeyExists(revokeSmtpCredentialResult, "rowCount")>
+        <cfset revokeSmtpRowsAffected = Val(revokeSmtpCredentialResult.rowCount)>
+      <cfelseif StructKeyExists(revokeSmtpCredentialResult, "recordCount")>
+        <cfset revokeSmtpRowsAffected = Val(revokeSmtpCredentialResult.recordCount)>
+      </cfif>
+      <cfif revokeSmtpRowsAffected GT 0>
         <cfset session.m = 5>
       <cfelse>
         <cfset session.m = 30>
@@ -490,7 +496,13 @@ queryExecute(
             AND username = <cfqueryparam value="#deleteSmtpUsername#" cfsqltype="cf_sql_varchar">
         </cfquery>
       </cftransaction>
-      <cfif StructKeyExists(deleteSmtpCredentialResult, "recordcount") AND deleteSmtpCredentialResult.recordcount GT 0>
+      <cfset deleteSmtpRowsAffected = 0>
+      <cfif StructKeyExists(deleteSmtpCredentialResult, "rowCount")>
+        <cfset deleteSmtpRowsAffected = Val(deleteSmtpCredentialResult.rowCount)>
+      <cfelseif StructKeyExists(deleteSmtpCredentialResult, "recordCount")>
+        <cfset deleteSmtpRowsAffected = Val(deleteSmtpCredentialResult.recordCount)>
+      </cfif>
+      <cfif deleteSmtpRowsAffected GT 0>
         <cfset session.m = 6>
       <cfelse>
         <cfset session.m = 30>
