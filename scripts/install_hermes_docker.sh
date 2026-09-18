@@ -4730,6 +4730,9 @@ main() {
     if state_is_done "02-mounts-configured"; then
         log "Skip: storage mount points already configured"
         load_config
+    elif [[ "${HERMES_INSTALL_PRESEEDED:-0}" == "1" ]] && load_config; then
+        log "Using pre-seeded storage mount points from ${CONFIG_FILE}"
+        state_mark_done "02-mounts-configured"
     else
         prompt_mount_points
         state_mark_done "02-mounts-configured"
@@ -4751,6 +4754,11 @@ main() {
         HERMES_HOST_IP=$(state_get_value "03-host-ip-confirmed")
         export HERMES_HOST_IP
         log "Skip: host IP already confirmed (${HERMES_HOST_IP})"
+    elif [[ "${HERMES_INSTALL_PRESEEDED:-0}" == "1" ]] && [[ -n "$(state_get_value "03-host-ip-confirmed")" ]]; then
+        HERMES_HOST_IP=$(state_get_value "03-host-ip-confirmed")
+        export HERMES_HOST_IP
+        log "Using pre-seeded host IP (${HERMES_HOST_IP})"
+        state_mark_done "03-host-ip-confirmed"
     else
         prompt_host_ip
         state_set_value "03-host-ip-confirmed" "$HERMES_HOST_IP"
@@ -4762,6 +4770,15 @@ main() {
         HERMES_MAIL_DOMAIN=$(state_get_value "04-mail-domain-confirmed")
         export HERMES_MAIL_HOSTNAME HERMES_MAIL_DOMAIN
         log "Skip: mail hostname already confirmed (${HERMES_MAIL_HOSTNAME} / ${HERMES_MAIL_DOMAIN})"
+    elif [[ "${HERMES_INSTALL_PRESEEDED:-0}" == "1" ]] \
+        && [[ -n "$(state_get_value "04-mail-hostname-confirmed")" ]] \
+        && [[ -n "$(state_get_value "04-mail-domain-confirmed")" ]]; then
+        HERMES_MAIL_HOSTNAME=$(state_get_value "04-mail-hostname-confirmed")
+        HERMES_MAIL_DOMAIN=$(state_get_value "04-mail-domain-confirmed")
+        export HERMES_MAIL_HOSTNAME HERMES_MAIL_DOMAIN
+        log "Using pre-seeded mail hostname (${HERMES_MAIL_HOSTNAME} / ${HERMES_MAIL_DOMAIN})"
+        state_mark_done "04-mail-hostname-confirmed"
+        state_mark_done "04-mail-domain-confirmed"
     else
         prompt_mail_hostname
         state_set_value "04-mail-hostname-confirmed" "$HERMES_MAIL_HOSTNAME"
@@ -4774,6 +4791,11 @@ main() {
         HERMES_CONSOLE_HOST=$(state_get_value "05-console-host-confirmed")
         export HERMES_CONSOLE_HOST
         log "Skip: console address already set (${HERMES_CONSOLE_HOST})"
+    elif [[ "${HERMES_INSTALL_PRESEEDED:-0}" == "1" ]] && [[ -n "$(state_get_value "05-console-host-confirmed")" ]]; then
+        HERMES_CONSOLE_HOST=$(state_get_value "05-console-host-confirmed")
+        export HERMES_CONSOLE_HOST
+        log "Using pre-seeded console address (${HERMES_CONSOLE_HOST})"
+        state_mark_done "05-console-host-confirmed"
     else
         # No prompt -- install always uses the Host IP as the console address.
         # The .env CONSOLE_HOST and parameters2.console.host both get the IP at
@@ -4790,6 +4812,9 @@ main() {
 
     if state_is_done "03b-dns-forwarders-configured"; then
         log "Skip: DNS forwarders already configured ($(state_get_value 03b-dns-forwarders-configured))"
+    elif [[ "${HERMES_INSTALL_PRESEEDED:-0}" == "1" ]] && [[ -n "$(state_get_value "03b-dns-forwarders-configured")" ]]; then
+        log "Using pre-seeded DNS forwarders ($(state_get_value 03b-dns-forwarders-configured))"
+        state_mark_done "03b-dns-forwarders-configured"
     else
         prompt_dns_forwarders
         state_mark_done "03b-dns-forwarders-configured"
