@@ -333,17 +333,27 @@ queryExecute(
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfif>
+<cfset hashCommandPreflightOutput = "">
+<cfset hashCommandPreflightError = "">
+<cfset hashCommandPreflightOk = false>
 <cftry>
     <cfexecute
       name="/bin/sh"
-      arguments='-c "#dockerBinary# exec hermes_dovecot sh -c ''command -v base64 >/dev/null 2>&1 && command -v doveadm >/dev/null 2>&1''"'
+      arguments='-c "#dockerBinary# exec hermes_dovecot sh -c ''if command -v base64 >/dev/null 2>&1 && command -v doveadm >/dev/null 2>&1; then echo OK; else echo MISSING; exit 1; fi''"'
+      variable="hashCommandPreflightOutput"
+      errorVariable="hashCommandPreflightError"
       timeout="20"></cfexecute>
+  <cfif Trim(hashCommandPreflightOutput) EQ "OK">
+    <cfset hashCommandPreflightOk = true>
+  </cfif>
 <cfcatch type="any">
+</cfcatch>
+</cftry>
+<cfif NOT hashCommandPreflightOk>
   <cfset session.smtpCredentialErrorDetail = "Required hash commands were not found in the hermes_dovecot container.">
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
-</cfcatch>
-</cftry>
+</cfif>
 <cftry>
     <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
     <!--
@@ -498,15 +508,13 @@ queryExecute(
         <cfset session.smtpCredentialErrorDetail = "Invalid SMTP credential identifier for delete request.">
         <cflocation url="view_transactional_emails.cfm" addtoken="no">
       </cfif>
-      <cftransaction>
-        <cfquery datasource="hermes" result="deleteSmtpCredentialResult">
-          DELETE FROM transactional_smtp_credentials
-          WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
-            AND username = <cfqueryparam value="#deleteSmtpUsername#" cfsqltype="cf_sql_varchar">
-            AND LEFT(username, 5) = 'smtp_'
-            AND active = 0
-        </cfquery>
-      </cftransaction>
+      <cfquery datasource="hermes" result="deleteSmtpCredentialResult">
+        DELETE FROM transactional_smtp_credentials
+        WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
+          AND username = <cfqueryparam value="#deleteSmtpUsername#" cfsqltype="cf_sql_varchar">
+          AND LEFT(username, 5) = 'smtp_'
+          AND active = 0
+      </cfquery>
       <cfset deleteSmtpRowsAffected = 0>
       <cfif StructKeyExists(deleteSmtpCredentialResult, "rowCount")>
         <cfset deleteSmtpRowsAffected = Val(deleteSmtpCredentialResult.rowCount)>
