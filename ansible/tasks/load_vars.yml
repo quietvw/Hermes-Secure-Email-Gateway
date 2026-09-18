@@ -31,11 +31,11 @@
 
 - name: Check for Hermes checkout on the managed host
   ansible.builtin.stat:
-    path: "{{ hermes_root_effective }}/docker-compose.yml"
+    path: "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
   register: hermes_checkout
 
 - name: Require Hermes checkout on the managed host
   ansible.builtin.assert:
     that:
       - hermes_checkout.stat.exists
-    fail_msg: "Expected an existing Hermes repository checkout on the managed host at {{ hermes_root_effective }}."
+    fail_msg: "Expected an existing Hermes repository checkout on the managed host at {{ hermes_root_effective }} with scripts/install_hermes_docker.sh present."

@@ -30,5 +30,10 @@
 
     - name: Fail when smoke test reports errors
       ansible.builtin.fail:
-        msg: "Hermes smoke test failed with rc={{ hermes_smoke_test.rc }}."
+        msg: |-
+          Hermes smoke test failed with rc={{ hermes_smoke_test.rc }}.
+          stdout:
+          {{ (hermes_smoke_test.stdout | default('')) | trim }}
+          stderr:
+          {{ (hermes_smoke_test.stderr | default('')) | trim }}
       when: hermes_smoke_test.rc != 0

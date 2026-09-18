@@ -90,9 +90,14 @@
         - "04-mail-domain-confirmed"
         - "05-console-host-confirmed"
 
+    - name: Check whether installer EULA was already accepted on target
+      ansible.builtin.stat:
+        path: "{{ hermes_root_effective }}/.install-state/00-eula-accepted.done"
+      register: hermes_eula_state
+
     - name: Run installer
       ansible.builtin.shell: |
-        if [[ -f "{{ hermes_root_effective }}/.install-state/00-eula-accepted.done" ]]; then
+        if [[ "{{ hermes_eula_state.stat.exists }}" == "True" ]]; then
           printf 'y\n' | bash "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
         else
           printf '1\ny\n' | bash "{{ hermes_root_effective }}/scripts/install_hermes_docker.sh"
