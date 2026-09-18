@@ -334,6 +334,17 @@ queryExecute(
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfif>
 <cftry>
+    <cfexecute
+      name="/bin/sh"
+      arguments='-c "#dockerBinary# exec hermes_dovecot sh -c ''command -v base64 >/dev/null 2>&1 && command -v doveadm >/dev/null 2>&1''"'
+      timeout="20"></cfexecute>
+<cfcatch type="any">
+  <cfset session.smtpCredentialErrorDetail = "Required hash commands were not found in the hermes_dovecot container.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfcatch>
+</cftry>
+<cftry>
     <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
     <!--
       Keep plaintext off process arguments. Pass Base64 data into the
