@@ -336,6 +336,7 @@ queryExecute(
 <cfset hashCommandPreflightOutput = "">
 <cfset hashCommandPreflightError = "">
 <cfset hashCommandPreflightOk = false>
+<cfset hashCommandPreflightExecutionFailed = false>
 <cftry>
     <cfexecute
       name="/bin/sh"
@@ -347,9 +348,10 @@ queryExecute(
     <cfset hashCommandPreflightOk = true>
   </cfif>
 <cfcatch type="any">
+  <cfset hashCommandPreflightExecutionFailed = true>
 </cfcatch>
 </cftry>
-<cfif NOT hashCommandPreflightOk>
+<cfif hashCommandPreflightExecutionFailed OR NOT hashCommandPreflightOk>
   <cfset session.smtpCredentialErrorDetail = "Unable to run required hash commands in the hermes_dovecot container. " & Left(Trim(hashCommandPreflightOutput & " " & hashCommandPreflightError), 200)>
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
