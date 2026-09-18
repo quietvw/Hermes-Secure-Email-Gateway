@@ -288,19 +288,7 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
-<cfset smtpHashTempSuffix = "">
-<cfset _smtpHashTempAttempts = 0>
-<cfloop condition="_smtpHashTempAttempts LT 5 AND REFind('^[A-Za-z0-9_-]{24}$', smtpHashTempSuffix) EQ 0">
-  <cfset _smtpHashTempAttempts = _smtpHashTempAttempts + 1>
-  <cfset _transLength = 24>
-  <cfinclude template="./inc/generate_customtrans.cfm">
-  <cfset smtpHashTempSuffix = customtrans3>
-</cfloop>
-<cfif REFind("^[A-Za-z0-9_-]{24}$", smtpHashTempSuffix) EQ 0>
-  <cfset session.smtpCredentialErrorDetail = "Temporary hash directory suffix validation failed.">
-  <cfset session.m = 30>
-  <cflocation url="view_transactional_emails.cfm" addtoken="no">
-</cfif>
+<cfset smtpHashTempDir = "">
 <cftry>
   <cfdirectory action="create" directory="/opt/hermes/tmp" mode="700">
 <cfcatch type="any">
@@ -311,20 +299,37 @@ queryExecute(
   </cfif>
 </cfcatch>
 </cftry>
-<cfset smtpHashTempDir = "/opt/hermes/tmp/tx_smtp_" & smtpHashTempSuffix>
-<cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashTempDir) EQ 0>
-  <cfset session.smtpCredentialErrorDetail = "Temporary hash directory path validation failed.">
-  <cfset session.m = 30>
-  <cflocation url="view_transactional_emails.cfm" addtoken="no">
-</cfif>
-<cftry>
-  <cfdirectory action="create" directory="#smtpHashTempDir#" mode="700">
-<cfcatch type="any">
+<cfset _smtpHashTempAttempts = 0>
+<cfloop condition="_smtpHashTempAttempts LT 5 AND smtpHashTempDir EQ ''">
+  <cfset _smtpHashTempAttempts = _smtpHashTempAttempts + 1>
+  <cfset _transLength = 24>
+  <cfinclude template="./inc/generate_customtrans.cfm">
+  <cfset smtpHashTempSuffix = customtrans3>
+  <cfif REFind("^[A-Za-z0-9_-]{24}$", smtpHashTempSuffix) EQ 0>
+    <cfcontinue>
+  </cfif>
+  <cfset smtpHashTempDirCandidate = "/opt/hermes/tmp/tx_smtp_" & smtpHashTempSuffix>
+  <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashTempDirCandidate) EQ 0>
+    <cfcontinue>
+  </cfif>
+  <cfif DirectoryExists(smtpHashTempDirCandidate)>
+    <cfcontinue>
+  </cfif>
+  <cftry>
+    <cfdirectory action="create" directory="#smtpHashTempDirCandidate#" mode="700">
+    <cfset smtpHashTempDir = smtpHashTempDirCandidate>
+  <cfcatch type="any">
+    <cfif DirectoryExists(smtpHashTempDirCandidate)>
+      <cfset smtpHashTempDir = smtpHashTempDirCandidate>
+    </cfif>
+  </cfcatch>
+  </cftry>
+</cfloop>
+<cfif smtpHashTempDir EQ "">
   <cfset session.smtpCredentialErrorDetail = "Unable to create isolated temporary directory for SMTP hash generation.">
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
-</cfcatch>
-</cftry>
+</cfif>
 <cfset smtpHashInputFile = smtpHashTempDir & "/password.b64">
 <cfset smtpHashScriptFile = smtpHashTempDir & "/generate_hash.sh">
 <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashInputFile) EQ 0>
@@ -506,6 +511,7 @@ queryExecute(
           DELETE FROM transactional_smtp_credentials
           WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
             AND username = <cfqueryparam value="#deleteSmtpUsername#" cfsqltype="cf_sql_varchar">
+            AND LEFT(username, 5) = 'smtp_'
         </cfquery>
       </cftransaction>
       <cfset deleteSmtpRowsAffected = 0>
