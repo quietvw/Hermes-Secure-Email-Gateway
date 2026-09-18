@@ -53,6 +53,14 @@ if [[ -z "${HERMES_ROOT:-}" ]]; then
         exit 1
     fi
 fi
+
+HOST_SQL_LIB="${HERMES_ROOT}/config/hermes/opt/hermes/scripts/lib_db_user_hosts.sh"
+if [[ ! -f "$HOST_SQL_LIB" ]]; then
+    echo "ERROR: Missing shared host SQL library at $HOST_SQL_LIB" >&2
+    exit 1
+fi
+source "$HOST_SQL_LIB"
+
 SECRETS_DIR="${HERMES_ROOT}/config/hermes/opt/hermes/keys"
 CREDS_DIR="${HERMES_ROOT}/config/hermes/opt/hermes/creds"
 CONFIG_FILE="${HERMES_ROOT}/.hermes_install_config"
@@ -160,6 +168,10 @@ generate_random_username() {
         word="${fallback[$((RANDOM % ${#fallback[@]}))]}"
     fi
     echo "${word}$(( RANDOM % 9000 + 1000 ))"
+}
+
+sql_escape() {
+    printf "%s" "$1" | sed "s/'/''/g"
 }
 
 generate_hex() {
@@ -3062,21 +3074,74 @@ create_databases() {
         local user="$2"
         local pass="$3"
         local collation="${4:-utf8mb4_unicode_ci}"
+        if [[ "$user" == "root" ]]; then
+            error "Refusing stale-host cleanup for protected MariaDB account 'root'"
+        fi
+        local managed_service_user=false
+        local _allowed_service_user
+        for _allowed_service_user in \
+            "$HERMES_DB_USER" \
+            "$AUTHELIA_DB_USER" \
+            "$OPENDMARC_DB_USER" \
+            "$SYSLOG_DB_USER" \
+            "$CIPHERMAIL_DB_USER" \
+            "$NEXTCLOUD_DB_USER"; do
+            if [[ -n "$_allowed_service_user" && "$user" == "$_allowed_service_user" ]]; then
+                managed_service_user=true
+                break
+            fi
+        done
+        if [[ "$managed_service_user" != true ]]; then
+            error "Refusing stale-host cleanup for unmanaged MariaDB account '${user}'"
+        fi
+        local user_esc
+        local pass_esc
+        local host host_esc host_rows
+        user_esc="$(sql_escape "$user")"
+        pass_esc="$(sql_escape "$pass")"
 
         log "Creating database '${dbname}' (user '${user}')..."
         # `CREATE USER IF NOT EXISTS` is a NO-OP if the user exists, which
         # means stale users from a prior install (whose MariaDB data
         # survived an incomplete wipe) keep their OLD password — and the
         # current install's NEW password silently fails to authenticate.
-        # The ALTER USER below force-syncs the password whether the user is
-        # being created fresh or already existed. Idempotent + makes the
-        # whole step safe to re-run on a partially-stale MariaDB volume.
-        docker exec hermes_db_server mysql -u root -e "
+        # Ensure '%' account exists, then force-sync its password so stale
+        # credentials from prior partial installs cannot persist.
+        if ! docker exec hermes_db_server mysql -u root -e "
             CREATE DATABASE IF NOT EXISTS \`${dbname}\` CHARACTER SET utf8mb4 COLLATE ${collation};
-            CREATE USER IF NOT EXISTS '${user}'@'%' IDENTIFIED BY '${pass}';
-            ALTER USER '${user}'@'%' IDENTIFIED BY '${pass}';
-            GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${user}'@'%';
-        " 2>> "$LOG_FILE"
+        " 2>> "$LOG_FILE"; then
+            error "Failed to create database '${dbname}' (see $LOG_FILE)"
+        fi
+
+        local host_query
+        host_query="$(hermes_non_wildcard_host_query "$user")"
+        if ! host_rows="$(
+            docker exec hermes_db_server mysql -N -B -u root -e "$host_query" 2>> "$LOG_FILE"
+        )"; then
+            error "Failed to enumerate stale MariaDB user host entries for '${user}' (see $LOG_FILE)"
+        fi
+
+        while IFS= read -r host; do
+            [[ -z "$host" ]] && continue
+            host_esc="$(sql_escape "$host")"
+            if ! docker exec hermes_db_server mysql -u root -e \
+                "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"; then
+                error "Failed to drop stale MariaDB user host entry '${user}'@'${host}' (see $LOG_FILE)"
+            fi
+        done <<< "$host_rows"
+
+        if ! docker exec hermes_db_server mysql -u root -e "
+            CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
+        " 2>> "$LOG_FILE"; then
+            error "Failed to ensure MariaDB user '${user}'@'%' exists (see $LOG_FILE)"
+        fi
+
+        if ! docker exec hermes_db_server mysql -u root -e "
+            ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';
+            GRANT ALL PRIVILEGES ON \`${dbname}\`.* TO '${user_esc}'@'%';
+        " 2>> "$LOG_FILE"; then
+            error "Failed to synchronize grants/password for '${user}'@'%' on database '${dbname}' (see $LOG_FILE)"
+        fi
     }
 
     _create_db_user hermes    "$HERMES_DB_USER"     "$HERMES_DB_PASS"

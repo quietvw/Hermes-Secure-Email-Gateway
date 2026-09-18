@@ -244,32 +244,136 @@ queryExecute(
       </cfif>
     </cfif>
 
-    <cfset _transLength = 16>
-    <cfinclude template="./inc/generate_customtrans.cfm">
-    <cfset smtpUsername = "smtp_" & customtrans3>
-    <cfset _transLength = 32>
-    <cfinclude template="./inc/generate_customtrans.cfm">
-    <cfset smtpPasswordPlain = customtrans3>
+    <cfset smtpUsername = "">
+    <cfset smtpPasswordPlain = "">
+    <cfset _smtpCredentialGenAttempts = 0>
+    <cfloop condition="_smtpCredentialGenAttempts LT 5 AND (REFind('^smtp_[a-z0-9]{16}$', smtpUsername) EQ 0 OR REFind('^[a-z0-9]{32}$', smtpPasswordPlain) EQ 0)">
+      <cfset _smtpCredentialGenAttempts = _smtpCredentialGenAttempts + 1>
+      <cfset _transLength = 16>
+      <cfinclude template="./inc/generate_customtrans.cfm">
+      <cfset smtpUsername = "smtp_" & LCase(customtrans3)>
+      <cfset _transLength = 32>
+      <cfinclude template="./inc/generate_customtrans.cfm">
+      <cfset smtpPasswordPlain = LCase(customtrans3)>
+    </cfloop>
     <cfset session.smtpCredentialErrorDetail = "">
+    <cfif REFind("^smtp_[a-z0-9]{16}$", smtpUsername) EQ 0 OR REFind("^[a-z0-9]{32}$", smtpPasswordPlain) EQ 0>
+      <cfset session.smtpCredentialErrorDetail = "Could not generate a valid SMTP credential value. Please retry.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
     <cfif REFind("[\r\n]", smtpPasswordPlain) GT 0>
       <cfset session.smtpCredentialErrorDetail = "Generated password contained unsupported line breaks.">
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
-  <cfset smtpPasswordBase64 = ToBase64(smtpPasswordPlain, "UTF-8")>
-
+    <cfset smtpPasswordBase64 = ToBase64(smtpPasswordPlain, "UTF-8")>
+    <cfif REFind("[^A-Za-z0-9+/=]", smtpPasswordBase64) GT 0>
+      <cfset session.smtpCredentialErrorDetail = "Generated password encoding was invalid.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
+    <cfset dockerBinary = "">
+    <cfif FileExists("/usr/local/bin/docker")>
+      <cfset dockerBinary = "/usr/local/bin/docker">
+    <cfelseif FileExists("/usr/bin/docker")>
+      <cfset dockerBinary = "/usr/bin/docker">
+    <cfelse>
+      <cfset session.smtpCredentialErrorDetail = "Docker CLI not found in commandbox container. Unable to generate SMTP credential hash.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
+    <cfif REFind("^/[A-Za-z0-9._/-]+$", dockerBinary) EQ 0>
+      <cfset session.smtpCredentialErrorDetail = "Docker CLI path validation failed.">
+      <cfset session.m = 30>
+      <cflocation url="view_transactional_emails.cfm" addtoken="no">
+    </cfif>
+<cfset smtpHashTempDir = "">
 <cftry>
-  <!--
-    Lucee cfexecute does not support stdin/input.
-    Pass the password as Base64 so the actual password never appears
-    in the shell command or process arguments.
-  -->
-  <cfexecute
-    name="/bin/sh"
-    arguments='-c "printf %s "#smtpPasswordBase64#" | base64 -d | /usr/local/bin/docker exec -i hermes_dovecot doveadm pw -s ARGON2ID"'
-    variable="smtpPasswordHash"
-    errorVariable="smtpPasswordHashError"
-    timeout="60"></cfexecute>
+  <cfdirectory action="create" directory="/opt/hermes/tmp" mode="700">
+<cfcatch type="any">
+  <cfif NOT DirectoryExists("/opt/hermes/tmp")>
+    <cfset session.smtpCredentialErrorDetail = "Unable to create temporary parent directory for SMTP hash generation.">
+    <cfset session.m = 30>
+    <cflocation url="view_transactional_emails.cfm" addtoken="no">
+  </cfif>
+</cfcatch>
+</cftry>
+<cfset _smtpHashTempAttempts = 0>
+<cfloop condition="_smtpHashTempAttempts LT 5 AND smtpHashTempDir EQ ''">
+  <cfset _smtpHashTempAttempts = _smtpHashTempAttempts + 1>
+  <cfset _transLength = 24>
+  <cfinclude template="./inc/generate_customtrans.cfm">
+  <cfset smtpHashTempSuffix = customtrans3>
+  <cfif REFind("^[A-Za-z0-9_-]{24}$", smtpHashTempSuffix) EQ 0>
+    <cfcontinue>
+  </cfif>
+  <cfset smtpHashTempDirCandidate = "/opt/hermes/tmp/tx_smtp_" & smtpHashTempSuffix>
+  <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashTempDirCandidate) EQ 0>
+    <cfcontinue>
+  </cfif>
+  <cfif DirectoryExists(smtpHashTempDirCandidate)>
+    <cfcontinue>
+  </cfif>
+  <cftry>
+    <cfdirectory action="create" directory="#smtpHashTempDirCandidate#" mode="700">
+    <cfset smtpHashTempDir = smtpHashTempDirCandidate>
+  <cfcatch type="any">
+  </cfcatch>
+  </cftry>
+</cfloop>
+<cfif smtpHashTempDir EQ "">
+  <cfset session.smtpCredentialErrorDetail = "Unable to create isolated temporary directory for SMTP hash generation.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfif>
+<cfset smtpHashInputFile = smtpHashTempDir & "/password.b64">
+<cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashInputFile) EQ 0>
+  <cfset session.smtpCredentialErrorDetail = "Temporary hash file path validation failed.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfif>
+<cfset hashCommandPreflightOutput = "">
+<cfset hashCommandPreflightError = "">
+<cfset hashCommandPreflightOk = false>
+<cfset hashCommandPreflightExecutionFailed = false>
+<cfset hashCommandPreflightOutputNormalized = "">
+<cftry>
+    <cfexecute
+      name="/bin/sh"
+      arguments='-c "#dockerBinary# exec hermes_dovecot sh -c ''if command -v base64 >/dev/null 2>&1 && command -v doveadm >/dev/null 2>&1; then echo OK; else echo MISSING; exit 1; fi''"'
+      variable="hashCommandPreflightOutput"
+      errorVariable="hashCommandPreflightError"
+      timeout="20"></cfexecute>
+  <cfset hashCommandPreflightOutputNormalized = REReplace(hashCommandPreflightOutput, "[\r\n]", "", "all")>
+  <cfif Trim(hashCommandPreflightOutputNormalized) EQ "OK">
+    <cfset hashCommandPreflightOk = true>
+  </cfif>
+<cfcatch type="any">
+  <cfset hashCommandPreflightExecutionFailed = true>
+</cfcatch>
+</cftry>
+<cfif hashCommandPreflightExecutionFailed OR NOT hashCommandPreflightOk>
+  <cflog
+    file="hermes"
+    type="error"
+    text="Transactional SMTP hash preflight failed: #Left(Trim(hashCommandPreflightOutput & ' ' & hashCommandPreflightError), 1000)#">
+  <cfset session.smtpCredentialErrorDetail = "Unable to run required hash commands in the hermes_dovecot container.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfif>
+<cftry>
+    <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
+    <!--
+      Keep plaintext off process arguments. Pass Base64 data into the
+      container, decode there, and feed doveadm via stdin.
+    -->
+    <cfexecute
+      name="/bin/sh"
+      arguments='-c "#dockerBinary# exec -i hermes_dovecot sh -c ''tmp2=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; umask 077; trap \"rm -f \\\"$tmp2\\\"\" EXIT; base64 -d > \"$tmp2\" && doveadm pw -s ARGON2ID < \"$tmp2\"'' < \"#smtpHashInputFile#\""'
+      variable="smtpPasswordHash"
+      errorVariable="smtpPasswordHashError"
+      timeout="60"></cfexecute>
 
   <cfset smtpPasswordHash = Trim(smtpPasswordHash)>
 
@@ -331,6 +435,29 @@ queryExecute(
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 
 </cfcatch>
+<cffinally>
+  <cfif smtpHashInputFile NEQ "" AND FileExists(smtpHashInputFile)>
+    <cftry>
+      <cffile action="delete" file="#smtpHashInputFile#">
+    <cfcatch type="any">
+      <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp hash file #smtpHashInputFile#: #cfcatch.message# #cfcatch.detail#">
+    </cfcatch>
+    </cftry>
+  </cfif>
+  <cfif IsDefined("smtpHashTempDir") AND smtpHashTempDir NEQ "" AND DirectoryExists(smtpHashTempDir)>
+    <cftry>
+      <cfdirectory action="list" directory="#smtpHashTempDir#" name="smtpHashTempDirEntries" type="all">
+      <cfif smtpHashTempDirEntries.recordcount EQ 0>
+        <cfdirectory action="delete" directory="#smtpHashTempDir#">
+      <cfelse>
+        <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: temp directory not empty, leaving in place #smtpHashTempDir#">
+      </cfif>
+    <cfcatch type="any">
+      <cflog file="hermes" type="warning" text="Transactional SMTP cleanup warning: unable to remove temp directory #smtpHashTempDir#: #cfcatch.message# #cfcatch.detail#">
+    </cfcatch>
+    </cftry>
+  </cfif>
+</cffinally>
 </cftry>
 
     <cfquery datasource="hermes">
@@ -357,12 +484,49 @@ queryExecute(
   <cfif form.action EQ "revoke_smtp_credential">
     <cfparam name="form.id" default="">
     <cfif IsNumeric(form.id)>
-      <cfquery datasource="hermes">
+      <cfquery datasource="hermes" result="revokeSmtpCredentialResult">
         UPDATE transactional_smtp_credentials
         SET active = 0, revoked_at = NOW()
         WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
+          AND LEFT(username, 5) = 'smtp_'
+          AND active = 1
       </cfquery>
-      <cfset session.m = 5>
+      <cfset revokeSmtpRowsAffected = 0>
+      <cfif StructKeyExists(revokeSmtpCredentialResult, "rowCount")>
+        <cfset revokeSmtpRowsAffected = Val(revokeSmtpCredentialResult.rowCount)>
+      <cfelseif StructKeyExists(revokeSmtpCredentialResult, "recordCount")>
+        <cfset revokeSmtpRowsAffected = Val(revokeSmtpCredentialResult.recordCount)>
+      </cfif>
+      <cfif revokeSmtpRowsAffected GT 0>
+        <cfset session.m = 5>
+      <cfelse>
+        <cfset session.m = 30>
+        <cfset session.smtpCredentialErrorDetail = "SMTP credential revoke request did not match an active SMTP credential.">
+      </cfif>
+    </cfif>
+    <cflocation url="view_transactional_emails.cfm" addtoken="no">
+  </cfif>
+  <cfif form.action EQ "delete_smtp_credential">
+    <cfparam name="form.id" default="">
+    <cfif IsNumeric(form.id)>
+      <cfquery datasource="hermes" result="deleteSmtpCredentialResult">
+        DELETE FROM transactional_smtp_credentials
+        WHERE id = <cfqueryparam value="#form.id#" cfsqltype="cf_sql_integer">
+          AND LEFT(username, 5) = 'smtp_'
+          AND active = 0
+      </cfquery>
+      <cfset deleteSmtpRowsAffected = 0>
+      <cfif StructKeyExists(deleteSmtpCredentialResult, "rowCount")>
+        <cfset deleteSmtpRowsAffected = Val(deleteSmtpCredentialResult.rowCount)>
+      <cfelseif StructKeyExists(deleteSmtpCredentialResult, "recordCount")>
+        <cfset deleteSmtpRowsAffected = Val(deleteSmtpCredentialResult.recordCount)>
+      </cfif>
+      <cfif deleteSmtpRowsAffected GT 0>
+        <cfset session.m = 6>
+      <cfelse>
+        <cfset session.m = 30>
+        <cfset session.smtpCredentialErrorDetail = "SMTP credential delete request did not match an existing SMTP credential.">
+      </cfif>
     </cfif>
     <cflocation url="view_transactional_emails.cfm" addtoken="no">
   </cfif>
@@ -415,6 +579,7 @@ queryExecute(
 <cfif m EQ 3><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>API token revoked.</div></cfif>
 <cfif m EQ 4><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>SMTP credential generated.</div></cfif>
 <cfif m EQ 5><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>SMTP credential revoked.</div></cfif>
+<cfif m EQ 6><div class="alert alert-success"><h5><i class="icon fas fa-check"></i> Success</h5>SMTP credential deleted.</div></cfif>
 <cfif m EQ 11><div class="alert alert-danger"><h5><i class="icon fas fa-ban"></i> Error</h5>API token name is required.</div></cfif>
 <cfif m EQ 12><div class="alert alert-danger"><h5><i class="icon fas fa-ban"></i> Error</h5>SMTP credential name is required.</div></cfif>
 <cfif m EQ 13><div class="alert alert-danger"><h5><i class="icon fas fa-ban"></i> Error</h5>API allowed sender must be a valid email address.</div></cfif>
@@ -537,9 +702,15 @@ queryExecute(
             <td class="text-end">
               <cfif Val(active) EQ 1>
               <form method="post" action="view_transactional_emails.cfm" style="display:inline;">
-                <input type="hidden" name="action" value="revoke_smtp_credential"><input type="hidden" name="id" value="#id#">
+                <input type="hidden" name="action" value="revoke_smtp_credential"><input type="hidden" name="id" value="#encodeForHTMLAttribute(id)#">
                 <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
                 <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+              </form>
+              <cfelse>
+              <form method="post" action="view_transactional_emails.cfm" style="display:inline;">
+                <input type="hidden" name="action" value="delete_smtp_credential"><input type="hidden" name="id" value="#encodeForHTMLAttribute(id)#">
+                <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
+                <button type="submit" class="btn btn-sm btn-danger ms-1" onclick="return confirm('Delete this SMTP credential permanently?');">Delete</button>
               </form>
               </cfif>
             </td>

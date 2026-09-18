@@ -143,11 +143,6 @@ function auth_passdb_lookup(req)
     end
     cur:close()
 
-    if #rows == 0 then
-        db_close(env, conn)
-        return dovecot.auth.PASSDB_RESULT_USER_UNKNOWN, "no app password"
-    end
-
     for _, r in ipairs(rows) do
         local ok = req:password_verify(r.password, req.password)
         if ok > 0 then
@@ -254,5 +249,8 @@ function auth_passdb_lookup(req)
     end
 
     db_close(env, conn)
+    if #rows == 0 then
+        return dovecot.auth.PASSDB_RESULT_USER_UNKNOWN, "no app password"
+    end
     return dovecot.auth.PASSDB_RESULT_PASSWORD_MISMATCH, "authentication failed"
 end

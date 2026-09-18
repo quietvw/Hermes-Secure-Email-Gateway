@@ -54,7 +54,15 @@ if [[ -z "${HERMES_ROOT:-}" ]]; then
         echo "Set HERMES_ROOT environment variable manually and retry." >&2
         exit 1
     fi
+
 fi
+
+HOST_SQL_LIB="${SCRIPT_DIR}/lib_db_user_hosts.sh"
+if [[ ! -f "$HOST_SQL_LIB" ]]; then
+    echo "ERROR: Missing shared host SQL library at $HOST_SQL_LIB" >&2
+    exit 1
+fi
+source "$HOST_SQL_LIB"
 
 # NOTE: /opt/hermes/creds is the path INSIDE the commandbox container
 # (bind-mounted from the host). This script runs ON the host, so we must
@@ -108,6 +116,10 @@ generate_password() {
     openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
 }
 
+sql_escape() {
+    printf "%s" "$1" | sed "s/'/''/g"
+}
+
 # Test whether (user, password) authenticates against MariaDB.
 # Returns 0 on success, non-zero on failure. Uses SELECT 1 — read-only.
 test_auth() {
@@ -126,15 +138,79 @@ test_root_socket_auth() {
     docker exec hermes_db_server mysql -u root -e "SELECT 1" >/dev/null 2>&1
 }
 
+# Remove host-specific MariaDB user rows for Hermes-managed service accounts.
+# If stale per-host rows exist from older installs, MySQL may prefer those over
+# '%' and reject credentials that otherwise validate.
+normalize_user_hosts() {
+    local user="$1"
+    if [[ "$user" == "root" ]]; then
+        log_error "Refusing host cleanup for protected MariaDB account: root"
+        return 1
+    fi
+    local managed_service_user=false
+    local allowed_user_file allowed_user
+    for allowed_user_file in hermes_username ciphermail_username syslog_username; do
+        [[ -f "${CREDS_DIR}/${allowed_user_file}" ]] || continue
+        allowed_user="$(tr -d '\n' < "${CREDS_DIR}/${allowed_user_file}")"
+        if [[ -n "$allowed_user" && "$user" == "$allowed_user" ]]; then
+            managed_service_user=true
+            break
+        fi
+    done
+    if [[ "$managed_service_user" != true ]]; then
+        log_error "Refusing host cleanup for unmanaged MariaDB account: ${user}"
+        return 1
+    fi
+    local user_esc host host_esc host_rows
+    user_esc="$(sql_escape "$user")"
+    local host_query
+    host_query="$(hermes_non_wildcard_host_query "$user")"
+    if ! host_rows="$(
+        docker exec hermes_db_server mysql -N -B -u root -e "$host_query"
+    )"; then
+        log_error "Failed to enumerate MariaDB host entries for user '${user}'"
+        return 1
+    fi
+    while IFS= read -r host; do
+        [[ -z "$host" ]] && continue
+        host_esc="$(sql_escape "$host")"
+        if ! docker exec hermes_db_server mysql -u root -e \
+            "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" >/dev/null 2>&1; then
+            log_error "Failed to drop stale MariaDB user host entry: '${user}'@'${host}'"
+            return 1
+        fi
+    done <<< "$host_rows"
+}
+
+ensure_wildcard_user_exists() {
+    local user="$1" pass="$2"
+    local user_esc pass_esc
+    user_esc="$(sql_escape "$user")"
+    pass_esc="$(sql_escape "$pass")"
+    if ! docker exec hermes_db_server mysql -u root -e \
+        "CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${pass_esc}';" >/dev/null 2>&1; then
+        log_error "Failed to ensure wildcard MariaDB user exists: '${user}'@'%'"
+        return 1
+    fi
+}
+
 # Restore a single user to its old password, both in the DB and in the creds
 # file. Called when a post-rotation auth test fails. Config-file backups
 # (.bak.YYYYMMDD) are left in place — operator must restore those manually
 # since the .bak names alone don't tell us which were touched in this run.
 rollback_user() {
     local user="$1" old_pass="$2" creds_file="$3"
+    local user_esc old_pass_esc
+    user_esc="$(sql_escape "$user")"
+    old_pass_esc="$(sql_escape "$old_pass")"
     log_warn "  Rolling back ${user} to old password..."
+    if ! normalize_user_hosts "$user"; then
+        log_error "  Failed to normalize host-specific rows during rollback for ${user}"
+    fi
     if docker exec hermes_db_server mysql -u root -e \
-        "ALTER USER '${user}'@'%' IDENTIFIED BY '${old_pass}'; FLUSH PRIVILEGES;" 2>/dev/null; then
+        "CREATE USER IF NOT EXISTS '${user_esc}'@'%' IDENTIFIED BY '${old_pass_esc}';
+         ALTER USER '${user_esc}'@'%' IDENTIFIED BY '${old_pass_esc}';
+         FLUSH PRIVILEGES;" 2>/dev/null; then
         log_info "  ALTER USER rolled back for ${user}"
     else
         log_error "  ALTER USER rollback FAILED for ${user} — manual intervention required"
@@ -615,10 +691,22 @@ if [[ "$ROTATE_HERMES" == true ]]; then
         echo "  Would run: ALTER USER '${NEW_HERMES_USER}'@'%' IDENTIFIED BY '***'"
         echo "  Would verify new password authenticates"
     else
-        echo -n "$NEW_HERMES_PASS" > "${CREDS_DIR}/hermes_password"
-        chmod 600 "${CREDS_DIR}/hermes_password"
-        docker exec hermes_db_server mysql -u root -e \
-            "ALTER USER '${NEW_HERMES_USER}'@'%' IDENTIFIED BY '${NEW_HERMES_PASS}'; FLUSH PRIVILEGES;" 2>/dev/null
+        hermes_user_esc="$(sql_escape "$NEW_HERMES_USER")"
+        hermes_pass_esc="$(sql_escape "$NEW_HERMES_PASS")"
+        if ! normalize_user_hosts "${NEW_HERMES_USER}"; then
+            rollback_user "${NEW_HERMES_USER}" "${OLD_HERMES_PASS}" "${CREDS_DIR}/hermes_password"
+            exit 1
+        fi
+        if ! ensure_wildcard_user_exists "${NEW_HERMES_USER}" "${NEW_HERMES_PASS}"; then
+            rollback_user "${NEW_HERMES_USER}" "${OLD_HERMES_PASS}" "${CREDS_DIR}/hermes_password"
+            exit 1
+        fi
+        if ! docker exec hermes_db_server mysql -u root -e \
+            "ALTER USER '${hermes_user_esc}'@'%' IDENTIFIED BY '${hermes_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
+            log_error "  ALTER USER failed for ${NEW_HERMES_USER}"
+            rollback_user "${NEW_HERMES_USER}" "${OLD_HERMES_PASS}" "${CREDS_DIR}/hermes_password"
+            exit 1
+        fi
         # Post-rotation auth test — verify the new password actually works.
         # Catches: silent ALTER USER no-op (host pattern mismatch), grant
         # propagation lag, anything else that would only surface as
@@ -628,6 +716,8 @@ if [[ "$ROTATE_HERMES" == true ]]; then
             rollback_user "${NEW_HERMES_USER}" "${OLD_HERMES_PASS}" "${CREDS_DIR}/hermes_password"
             exit 1
         fi
+        echo -n "$NEW_HERMES_PASS" > "${CREDS_DIR}/hermes_password"
+        chmod 600 "${CREDS_DIR}/hermes_password"
         log_info "  ✓ MariaDB password rotated and verified for user: ${NEW_HERMES_USER}"
     fi
 fi
@@ -638,15 +728,29 @@ if [[ "$ROTATE_CIPHERMAIL" == true ]]; then
         echo "  Would run: ALTER USER '${NEW_CIPHERMAIL_USER}'@'%' IDENTIFIED BY '***'"
         echo "  Would verify new password authenticates"
     else
-        echo -n "$NEW_CIPHERMAIL_PASS" > "${CREDS_DIR}/ciphermail_password"
-        chmod 600 "${CREDS_DIR}/ciphermail_password"
-        docker exec hermes_db_server mysql -u root -e \
-            "ALTER USER '${NEW_CIPHERMAIL_USER}'@'%' IDENTIFIED BY '${NEW_CIPHERMAIL_PASS}'; FLUSH PRIVILEGES;" 2>/dev/null
+        ciphermail_user_esc="$(sql_escape "$NEW_CIPHERMAIL_USER")"
+        ciphermail_pass_esc="$(sql_escape "$NEW_CIPHERMAIL_PASS")"
+        if ! normalize_user_hosts "${NEW_CIPHERMAIL_USER}"; then
+            rollback_user "${NEW_CIPHERMAIL_USER}" "${OLD_CIPHERMAIL_PASS}" "${CREDS_DIR}/ciphermail_password"
+            exit 1
+        fi
+        if ! ensure_wildcard_user_exists "${NEW_CIPHERMAIL_USER}" "${NEW_CIPHERMAIL_PASS}"; then
+            rollback_user "${NEW_CIPHERMAIL_USER}" "${OLD_CIPHERMAIL_PASS}" "${CREDS_DIR}/ciphermail_password"
+            exit 1
+        fi
+        if ! docker exec hermes_db_server mysql -u root -e \
+            "ALTER USER '${ciphermail_user_esc}'@'%' IDENTIFIED BY '${ciphermail_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
+            log_error "  ALTER USER failed for ${NEW_CIPHERMAIL_USER}"
+            rollback_user "${NEW_CIPHERMAIL_USER}" "${OLD_CIPHERMAIL_PASS}" "${CREDS_DIR}/ciphermail_password"
+            exit 1
+        fi
         if ! test_auth "${NEW_CIPHERMAIL_USER}" "${NEW_CIPHERMAIL_PASS}"; then
             log_error "  Post-rotation auth test FAILED for ${NEW_CIPHERMAIL_USER}"
             rollback_user "${NEW_CIPHERMAIL_USER}" "${OLD_CIPHERMAIL_PASS}" "${CREDS_DIR}/ciphermail_password"
             exit 1
         fi
+        echo -n "$NEW_CIPHERMAIL_PASS" > "${CREDS_DIR}/ciphermail_password"
+        chmod 600 "${CREDS_DIR}/ciphermail_password"
         log_info "  ✓ MariaDB password rotated and verified for user: ${NEW_CIPHERMAIL_USER}"
     fi
 fi
@@ -657,15 +761,29 @@ if [[ "$ROTATE_SYSLOG" == true ]]; then
         echo "  Would run: ALTER USER '${NEW_SYSLOG_USER}'@'%' IDENTIFIED BY '***'"
         echo "  Would verify new password authenticates"
     else
-        echo -n "$NEW_SYSLOG_PASS" > "${CREDS_DIR}/syslog_password"
-        chmod 600 "${CREDS_DIR}/syslog_password"
-        docker exec hermes_db_server mysql -u root -e \
-            "ALTER USER '${NEW_SYSLOG_USER}'@'%' IDENTIFIED BY '${NEW_SYSLOG_PASS}'; FLUSH PRIVILEGES;" 2>/dev/null
+        syslog_user_esc="$(sql_escape "$NEW_SYSLOG_USER")"
+        syslog_pass_esc="$(sql_escape "$NEW_SYSLOG_PASS")"
+        if ! normalize_user_hosts "${NEW_SYSLOG_USER}"; then
+            rollback_user "${NEW_SYSLOG_USER}" "${OLD_SYSLOG_PASS}" "${CREDS_DIR}/syslog_password"
+            exit 1
+        fi
+        if ! ensure_wildcard_user_exists "${NEW_SYSLOG_USER}" "${NEW_SYSLOG_PASS}"; then
+            rollback_user "${NEW_SYSLOG_USER}" "${OLD_SYSLOG_PASS}" "${CREDS_DIR}/syslog_password"
+            exit 1
+        fi
+        if ! docker exec hermes_db_server mysql -u root -e \
+            "ALTER USER '${syslog_user_esc}'@'%' IDENTIFIED BY '${syslog_pass_esc}'; FLUSH PRIVILEGES;" 2>/dev/null; then
+            log_error "  ALTER USER failed for ${NEW_SYSLOG_USER}"
+            rollback_user "${NEW_SYSLOG_USER}" "${OLD_SYSLOG_PASS}" "${CREDS_DIR}/syslog_password"
+            exit 1
+        fi
         if ! test_auth "${NEW_SYSLOG_USER}" "${NEW_SYSLOG_PASS}"; then
             log_error "  Post-rotation auth test FAILED for ${NEW_SYSLOG_USER}"
             rollback_user "${NEW_SYSLOG_USER}" "${OLD_SYSLOG_PASS}" "${CREDS_DIR}/syslog_password"
             exit 1
         fi
+        echo -n "$NEW_SYSLOG_PASS" > "${CREDS_DIR}/syslog_password"
+        chmod 600 "${CREDS_DIR}/syslog_password"
         log_info "  ✓ MariaDB password rotated and verified for user: ${NEW_SYSLOG_USER}"
     fi
 fi
