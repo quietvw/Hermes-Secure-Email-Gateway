@@ -32,6 +32,16 @@ Examples:
 EOF
 }
 
+require_option_value() {
+    local option="$1"
+    local value="${2-}"
+    if [[ -z "${value}" ]]; then
+        echo "ERROR: ${option} requires a value." >&2
+        usage >&2
+        exit 1
+    fi
+}
+
 require_ansible() {
     if ! command -v ansible-playbook >/dev/null 2>&1; then
         echo "ERROR: ansible-playbook was not found in PATH." >&2
@@ -201,8 +211,8 @@ command_backup() {
     local args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --path) args+=("-e" "backup_path=$2"); shift 2 ;;
-            --scope) args+=("-e" "backup_scope=$2"); shift 2 ;;
+            --path) require_option_value "$1" "${2-}"; args+=("-e" "backup_path=$2"); shift 2 ;;
+            --scope) require_option_value "$1" "${2-}"; args+=("-e" "backup_scope=$2"); shift 2 ;;
             --cold) args+=("-e" "backup_cold=true"); shift ;;
             --no-nc-maintenance) args+=("-e" "backup_no_nc_maintenance=true"); shift ;;
             --yes) args+=("-e" "hermes_yes=true"); shift ;;
@@ -218,8 +228,8 @@ command_restore() {
     local args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --backup-dir) args+=("-e" "backup_dir=$2"); shift 2 ;;
-            --only) args+=("-e" "restore_only=$2"); shift 2 ;;
+            --backup-dir) require_option_value "$1" "${2-}"; args+=("-e" "backup_dir=$2"); shift 2 ;;
+            --only) require_option_value "$1" "${2-}"; args+=("-e" "restore_only=$2"); shift 2 ;;
             --yes) args+=("-e" "hermes_yes=true"); shift ;;
             --dry-run) args+=("-e" "hermes_dry_run=true"); shift ;;
             --) shift; args+=("$@"); break ;;
@@ -233,12 +243,12 @@ command_migrate() {
     local args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --mode) args+=("-e" "legacy_mode=$2"); shift 2 ;;
-            --backup-file) args+=("-e" "legacy_backup_file=$2"); shift 2 ;;
-            --archive-file) args+=("-e" "legacy_archive_file=$2"); shift 2 ;;
-            --data-mount) args+=("-e" "legacy_data_mount=$2"); shift 2 ;;
-            --archive-mount) args+=("-e" "legacy_archive_mount=$2"); shift 2 ;;
-            --vmail-mount) args+=("-e" "legacy_vmail_mount=$2"); shift 2 ;;
+            --mode) require_option_value "$1" "${2-}"; args+=("-e" "legacy_mode=$2"); shift 2 ;;
+            --backup-file) require_option_value "$1" "${2-}"; args+=("-e" "legacy_backup_file=$2"); shift 2 ;;
+            --archive-file) require_option_value "$1" "${2-}"; args+=("-e" "legacy_archive_file=$2"); shift 2 ;;
+            --data-mount) require_option_value "$1" "${2-}"; args+=("-e" "legacy_data_mount=$2"); shift 2 ;;
+            --archive-mount) require_option_value "$1" "${2-}"; args+=("-e" "legacy_archive_mount=$2"); shift 2 ;;
+            --vmail-mount) require_option_value "$1" "${2-}"; args+=("-e" "legacy_vmail_mount=$2"); shift 2 ;;
             --) shift; args+=("$@"); break ;;
             *) args+=("$1"); shift ;;
         esac

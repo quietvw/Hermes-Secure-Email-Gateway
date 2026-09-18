@@ -27,6 +27,12 @@
         fail_msg: "Populate ansible/vars/hermes.yml with ./hermes_exec configure before running install."
 
   tasks:
+    - name: Display Hermes EULA notice for Ansible-driven installs
+      ansible.builtin.debug:
+        msg:
+          - "Hermes Pro EULA: https://docs.hermesseg.io/books/hermes-secure-email-gateway-general-documentation/page/hermes-secure-email-gateway-pro-end-user-license-agreement-eula"
+          - "Set hermes_eula_accepted: true in ansible/vars/hermes.yml only after reviewing and accepting that EULA."
+
     - name: Ensure installer state directory exists
       ansible.builtin.file:
         path: "{{ hermes_root_effective }}/.install-state"
