@@ -288,17 +288,29 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
-<cfset _transLength = 24>
-<cfinclude template="./inc/generate_customtrans.cfm">
-<cfset smtpHashTempSuffix = customtrans3>
+<cfset smtpHashTempSuffix = "">
+<cfset _smtpHashTempAttempts = 0>
+<cfloop condition="_smtpHashTempAttempts LT 5 AND REFind('^[A-Za-z0-9_-]{24}$', smtpHashTempSuffix) EQ 0">
+  <cfset _smtpHashTempAttempts = _smtpHashTempAttempts + 1>
+  <cfset _transLength = 24>
+  <cfinclude template="./inc/generate_customtrans.cfm">
+  <cfset smtpHashTempSuffix = customtrans3>
+</cfloop>
 <cfif REFind("^[A-Za-z0-9_-]{24}$", smtpHashTempSuffix) EQ 0>
   <cfset session.smtpCredentialErrorDetail = "Temporary hash directory suffix validation failed.">
   <cfset session.m = 30>
   <cflocation url="view_transactional_emails.cfm" addtoken="no">
 </cfif>
-<cfif NOT DirectoryExists("/opt/hermes/tmp")>
+<cftry>
   <cfdirectory action="create" directory="/opt/hermes/tmp" mode="700">
-</cfif>
+<cfcatch type="any">
+  <cfif NOT DirectoryExists("/opt/hermes/tmp")>
+    <cfset session.smtpCredentialErrorDetail = "Unable to create temporary parent directory for SMTP hash generation.">
+    <cfset session.m = 30>
+    <cflocation url="view_transactional_emails.cfm" addtoken="no">
+  </cfif>
+</cfcatch>
+</cftry>
 <cfset smtpHashTempDir = "/opt/hermes/tmp/tx_smtp_" & smtpHashTempSuffix>
 <cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashTempDir) EQ 0>
   <cfset session.smtpCredentialErrorDetail = "Temporary hash directory path validation failed.">
@@ -687,13 +699,13 @@ queryExecute(
                 <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
                 <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
               </form>
+              </cfif>
               <form method="post" action="view_transactional_emails.cfm" style="display:inline;">
                 <input type="hidden" name="action" value="delete_smtp_credential"><input type="hidden" name="id" value="#encodeForHTMLAttribute(id)#">
                 <input type="hidden" name="smtp_username" value="#encodeForHTMLAttribute(username)#">
                 <cfoutput><input type="hidden" name="csrf_token" value="#encodeForHTMLAttribute(session.transactionalEmailCsrf)#"></cfoutput>
                 <button type="submit" class="btn btn-sm btn-danger ms-1" onclick="return confirm('Delete this SMTP credential permanently?');">Delete</button>
               </form>
-              </cfif>
             </td>
           </tr>
         </cfoutput>
