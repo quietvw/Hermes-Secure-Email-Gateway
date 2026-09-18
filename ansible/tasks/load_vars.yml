@@ -13,17 +13,29 @@
     file: "{{ hermes_repo_root }}/ansible/vars/hermes.yml"
   when: hermes_generated_vars.stat.exists
 
-- name: Set effective Hermes root
+- name: Default hermes_root to the local checkout when safe
   ansible.builtin.set_fact:
-    hermes_root_effective: >-
-      {{
-        hermes_repo_root
-        if ((hermes_root | default('')) in ['', '/absolute/path/to/Hermes-Secure-Email-Gateway'] and (ansible_connection | default('ssh')) == 'local')
-        else (hermes_root | default(''))
-      }}
+    hermes_root: "{{ hermes_repo_root }}"
+  when: ((hermes_root | default('')) in ['', '/absolute/path/to/Hermes-Secure-Email-Gateway']) and ((ansible_connection | default('ssh')) == 'local')
 
 - name: Require hermes_root for remote targets
   ansible.builtin.assert:
     that:
-      - (hermes_root_effective | default('')) | length > 0
+      - (hermes_root | default('')) | length > 0
+      - hermes_root != '/absolute/path/to/Hermes-Secure-Email-Gateway'
     fail_msg: "Set hermes_root in ansible/vars/hermes.yml or via -e when targeting a non-local host."
+
+- name: Set effective Hermes root
+  ansible.builtin.set_fact:
+    hermes_root_effective: "{{ hermes_root }}"
+
+- name: Check for Hermes checkout on the managed host
+  ansible.builtin.stat:
+    path: "{{ hermes_root_effective }}/docker-compose.yml"
+  register: hermes_checkout
+
+- name: Require Hermes checkout on the managed host
+  ansible.builtin.assert:
+    that:
+      - hermes_checkout.stat.exists
+    fail_msg: "Expected an existing Hermes repository checkout on the managed host at {{ hermes_root_effective }}."

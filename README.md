@@ -410,7 +410,9 @@ If you need lower-level control, pass normal `ansible-playbook` arguments after
 use expects `ansible/inventory/hosts.yml` to exist (generate it with
 `./hermes_exec generate-config` or `./hermes_exec configure`). The playbooks
 load `ansible/vars/hermes.yml.example` by default and let a local
-`ansible/vars/hermes.yml` override it when present.
+`ansible/vars/hermes.yml` override it when present. For remote inventories, set
+`hermes_root` to the absolute path of an existing Hermes repository checkout on
+the managed host; the playbooks orchestrate that checkout but do not clone it.
 
 ## Documentation
 
