@@ -261,26 +261,18 @@ queryExecute(
       <cfset session.m = 30>
       <cflocation url="view_transactional_emails.cfm" addtoken="no">
     </cfif>
-    <cfset smtpPasswordBase64 = ToBase64(smtpPasswordPlain, "UTF-8")>
-  <cfif REFind("[^A-Za-z0-9+/=]", smtpPasswordBase64) GT 0>
-    <cfset session.smtpCredentialErrorDetail = "Generated password encoding was invalid.">
-    <cfset session.m = 30>
-    <cflocation url="view_transactional_emails.cfm" addtoken="no">
-  </cfif>
 
 <cftry>
-  <!--
-    Lucee cfexecute does not support stdin/input directly.
-    Pass the password as Base64 so the actual password never appears
-    in the shell command or process arguments. Decode + confirm inside
-    the container so the decoded secret is never expanded in shell source.
-  -->
-  <cfexecute
-    name="/bin/sh"
-    arguments='-c "printf %s \"#smtpPasswordBase64#\" | /usr/local/bin/docker exec -i hermes_dovecot bash -o pipefail -c '\''umask 077; tmp=$(mktemp /tmp/hermes_tx_pw.XXXXXX) || exit 1; trap \"rm -f \\\"$tmp\\\"\" EXIT; cat | base64 -d > \"$tmp\" && { cat \"$tmp\"; printf \"\n\"; cat \"$tmp\"; printf \"\n\"; } | doveadm pw -s ARGON2ID'\''"'
-    variable="smtpPasswordHash"
-    errorVariable="smtpPasswordHashError"
-    timeout="60"></cfexecute>
+    <!--
+      Use doveadm's non-interactive password option for deterministic hashing.
+      Password content is generated internally by Hermes and validated above.
+    -->
+    <cfexecute
+      name="/usr/local/bin/docker"
+      arguments='exec hermes_dovecot doveadm pw -s ARGON2ID -p #smtpPasswordPlain#'
+      variable="smtpPasswordHash"
+      errorVariable="smtpPasswordHashError"
+      timeout="60"></cfexecute>
 
   <cfset smtpPasswordHash = Trim(smtpPasswordHash)>
 
