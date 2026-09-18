@@ -4706,6 +4706,11 @@ main() {
         exit 0
     fi
 
+    if [[ "${HERMES_INSTALL_TEST_MODE:-0}" == "1" ]]; then
+        echo "Install confirmation test mode complete."
+        exit 0
+    fi
+
     # Start logging
     touch "$LOG_FILE"
     log "Installation started at $(date)"

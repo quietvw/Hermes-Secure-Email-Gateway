@@ -24,6 +24,7 @@
       - (hermes_root | default('')) | length > 0
       - hermes_root != '/absolute/path/to/Hermes-Secure-Email-Gateway'
     fail_msg: "Set hermes_root in ansible/vars/hermes.yml or via -e when targeting a non-local host."
+  when: (ansible_connection | default('ssh')) != 'local'
 
 - name: Set effective Hermes root
   ansible.builtin.set_fact:

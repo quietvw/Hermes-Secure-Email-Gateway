@@ -70,6 +70,7 @@ payload = json.loads(example_path.read_text(encoding="utf-8"))
 payload["hermes_root"] = repo_root
 output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
+    chmod 600 "${VARS_FILE}"
 }
 
 ensure_generated_files() {
@@ -160,6 +161,7 @@ payload = {
 }
 path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
+    chmod 600 "${INVENTORY_FILE}"
 
     python3 - <<'PY' "${VARS_FILE}" "${hermes_root}" "${host_ip}" "${mail_hostname}" "${mail_domain}" "${dns_forwarders}" "${data_mount}" "${archive_mount}" "${vmail_mount}" "${files_mount}" "${nextcloud_enabled}" "${eula_accepted}"
 from pathlib import Path
@@ -188,6 +190,7 @@ payload = {
 }
 path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
+    chmod 600 "${VARS_FILE}"
 
     echo "Wrote ${INVENTORY_FILE}"
     echo "Wrote ${VARS_FILE}"
