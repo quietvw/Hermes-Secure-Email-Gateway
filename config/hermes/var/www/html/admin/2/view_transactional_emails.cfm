@@ -289,6 +289,11 @@ queryExecute(
   <cfdirectory action="create" directory="/opt/hermes/tmp">
 </cfif>
 <cfset smtpHashInputFile = "/opt/hermes/tmp/tx_smtp_b64_" & customtrans3 & ".txt">
+<cfif REFind("^[A-Za-z0-9_./-]+$", smtpHashInputFile) EQ 0>
+  <cfset session.smtpCredentialErrorDetail = "Temporary hash file path validation failed.">
+  <cfset session.m = 30>
+  <cflocation url="view_transactional_emails.cfm" addtoken="no">
+</cfif>
 <cftry>
     <cffile action="write" file="#smtpHashInputFile#" output="#smtpPasswordBase64#" charset="utf-8" mode="600">
     <!--
