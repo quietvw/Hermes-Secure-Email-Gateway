@@ -140,8 +140,11 @@ normalize_user_hosts() {
     while IFS= read -r host; do
         [[ -z "$host" ]] && continue
         host_esc="$(sql_escape "$host")"
-        docker exec hermes_db_server mysql -u root -e \
-            "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" >/dev/null 2>&1
+        if ! docker exec hermes_db_server mysql -u root -e \
+            "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" >/dev/null 2>&1; then
+            log_error "Failed to drop stale MariaDB user host entry: '${user}'@'${host}'"
+            return 1
+        fi
     done < <(
         docker exec hermes_db_server mysql -N -B -u root -e \
             "SELECT Host FROM mysql.user

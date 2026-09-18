@@ -3080,8 +3080,10 @@ create_databases() {
         while IFS= read -r host; do
             [[ -z "$host" ]] && continue
             host_esc="${host//\'/\'\'}"
-            docker exec hermes_db_server mysql -u root -e \
-                "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"
+            if ! docker exec hermes_db_server mysql -u root -e \
+                "DROP USER IF EXISTS '${user_esc}'@'${host_esc}';" 2>> "$LOG_FILE"; then
+                error "Failed to drop stale MariaDB user host entry '${user}'@'${host}' (see $LOG_FILE)"
+            fi
         done < <(
             docker exec hermes_db_server mysql -N -B -u root -e \
                 "SELECT Host FROM mysql.user
